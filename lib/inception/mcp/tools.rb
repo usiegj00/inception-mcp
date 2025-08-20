@@ -445,6 +445,105 @@ module Inception
               },
               additionalProperties: false
             }
+          },
+          {
+            name: "scroll_page",
+            title: "Scroll Page",
+            description: "Scroll the page in a specified direction by a given amount, or scroll to top/bottom.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                direction: {
+                  type: "string",
+                  enum: ["up", "down", "left", "right", "top", "bottom"],
+                  description: "Direction to scroll"
+                },
+                amount: {
+                  type: "number",
+                  description: "Pixels to scroll (optional, defaults to 300 for directional scrolls)",
+                  minimum: 1
+                }
+              },
+              required: ["direction"],
+              additionalProperties: false
+            }
+          },
+          {
+            name: "scroll_to_element",
+            title: "Scroll to Element", 
+            description: "Scroll to bring a specific element into view, centered in the viewport.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                selector: {
+                  type: "string",
+                  description: "CSS selector for the element to scroll to"
+                }
+              },
+              required: ["selector"],
+              additionalProperties: false
+            }
+          },
+          {
+            name: "scroll_to_coordinates",
+            title: "Scroll to Coordinates",
+            description: "Scroll to specific x,y coordinates on the page.",
+            inputSchema: {
+              type: "object", 
+              properties: {
+                x: {
+                  type: "number",
+                  description: "X coordinate to scroll to",
+                  minimum: 0
+                },
+                y: {
+                  type: "number", 
+                  description: "Y coordinate to scroll to",
+                  minimum: 0
+                }
+              },
+              required: ["x", "y"],
+              additionalProperties: false
+            }
+          },
+          {
+            name: "get_scroll_position",
+            title: "Get Scroll Position",
+            description: "Get the current scroll position and page dimensions. Useful for understanding viewport context.",
+            inputSchema: {
+              type: "object",
+              properties: {},
+              additionalProperties: false
+            }
+          },
+          {
+            name: "smooth_scroll",
+            title: "Smooth Scroll",
+            description: "Perform a smooth animated scroll in the specified direction with custom duration.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                direction: {
+                  type: "string",
+                  enum: ["up", "down", "left", "right"],
+                  description: "Direction to scroll smoothly"
+                },
+                distance: {
+                  type: "number",
+                  description: "Distance in pixels to scroll",
+                  minimum: 1
+                },
+                duration: {
+                  type: "number",
+                  description: "Animation duration in milliseconds (default: 500)",
+                  minimum: 100,
+                  maximum: 3000,
+                  default: 500
+                }
+              },
+              required: ["direction", "distance"],
+              additionalProperties: false
+            }
           }
         ]
       end
@@ -1281,6 +1380,142 @@ module Inception
                 {
                   type: "text",
                   text: "Failed to retrieve console logs"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "scroll_page"
+          direction = arguments["direction"]
+          amount = arguments["amount"]
+          result = @cdp.scroll_page(direction, amount)
+          
+          if result["success"]
+            amount_text = amount ? " (#{amount} pixels)" : ""
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully scrolled #{result['direction']}#{amount_text}"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to scroll: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "scroll_to_element"
+          selector = arguments["selector"]
+          result = @cdp.scroll_to_element(selector)
+          
+          if result["success"]
+            visible_status = result["visible"] ? "visible" : "not fully visible"
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully scrolled to element '#{result['selector']}' at (#{result['x']}, #{result['y']}). Element is #{visible_status}."
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to scroll to element '#{selector}': #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "scroll_to_coordinates"
+          x = arguments["x"]
+          y = arguments["y"]
+          result = @cdp.scroll_to_coordinates(x, y)
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully scrolled to coordinates (#{result['x']}, #{result['y']})"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to scroll to coordinates (#{x}, #{y}): #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "get_scroll_position"
+          result = @cdp.get_scroll_position
+          
+          if result["success"]
+            output_text = "Current Scroll Position:\n"
+            output_text += "Position: (#{result['x']}, #{result['y']})\n"
+            output_text += "Max Scroll: (#{result['maxX']}, #{result['maxY']})\n"
+            output_text += "Viewport: #{result['viewportWidth']}x#{result['viewportHeight']}\n"
+            output_text += "Page Size: #{result['pageWidth']}x#{result['pageHeight']}"
+            
+            {
+              content: [
+                {
+                  type: "text",
+                  text: output_text
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to get scroll position: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "smooth_scroll"
+          direction = arguments["direction"]
+          distance = arguments["distance"]
+          duration = arguments.fetch("duration", 500)
+          result = @cdp.smooth_scroll(direction, distance, duration)
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully started smooth scroll #{result['direction']} by #{result['distance']} pixels over #{result['duration']}ms"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to smooth scroll: #{result['error']}"
                 }
               ],
               isError: true

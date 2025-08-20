@@ -747,6 +747,173 @@ module Inception
         { success: true, text: text }
       end
 
+      def scroll_page(direction, amount = nil)
+        return { error: 'Not connected' } unless @connected
+        
+        scroll_script = case direction.downcase
+        when 'up'
+          amount ||= 300
+          "window.scrollBy(0, -#{amount})"
+        when 'down'
+          amount ||= 300
+          "window.scrollBy(0, #{amount})"
+        when 'left'
+          amount ||= 300
+          "window.scrollBy(-#{amount}, 0)"
+        when 'right'
+          amount ||= 300
+          "window.scrollBy(#{amount}, 0)"
+        when 'top'
+          "window.scrollTo(0, 0)"
+        when 'bottom'
+          "window.scrollTo(0, document.body.scrollHeight)"
+        else
+          return { error: "Invalid scroll direction: #{direction}. Use 'up', 'down', 'left', 'right', 'top', or 'bottom'" }
+        end
+        
+        result = execute_script(scroll_script, false)
+        
+        if result['success']
+          { success: true, direction: direction, amount: amount }
+        else
+          { error: 'Failed to scroll page', details: result['error'] }
+        end
+      end
+
+      def scroll_to_element(selector)
+        return { error: 'Not connected' } unless @connected
+        
+        scroll_script = <<~JS
+          (() => {
+            const element = document.querySelector('#{selector.gsub("'", "\\'")}');
+            if (!element) {
+              return { error: 'Element not found', selector: '#{selector.gsub("'", "\\'")}' };
+            }
+            
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Wait a moment for smooth scrolling
+            return new Promise(resolve => {
+              setTimeout(() => {
+                const rect = element.getBoundingClientRect();
+                resolve({
+                  success: true,
+                  selector: '#{selector.gsub("'", "\\'")}',
+                  x: Math.round(rect.left + rect.width / 2),
+                  y: Math.round(rect.top + rect.height / 2),
+                  visible: rect.top >= 0 && rect.top <= window.innerHeight
+                });
+              }, 500);
+            });
+          })()
+        JS
+        
+        result = execute_script(scroll_script, true)
+        
+        if result['success'] && result['value']
+          result['value']
+        else
+          { error: 'Failed to scroll to element', selector: selector }
+        end
+      end
+
+      def scroll_to_coordinates(x, y)
+        return { error: 'Not connected' } unless @connected
+        
+        scroll_script = "window.scrollTo(#{x}, #{y})"
+        result = execute_script(scroll_script, false)
+        
+        if result['success']
+          { success: true, x: x, y: y }
+        else
+          { error: 'Failed to scroll to coordinates', x: x, y: y }
+        end
+      end
+
+      def get_scroll_position
+        return { error: 'Not connected' } unless @connected
+        
+        scroll_script = <<~JS
+          ({
+            x: window.pageXOffset || document.documentElement.scrollLeft,
+            y: window.pageYOffset || document.documentElement.scrollTop,
+            maxX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            maxY: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight,
+            pageWidth: document.documentElement.scrollWidth,
+            pageHeight: document.documentElement.scrollHeight
+          })
+        JS
+        
+        result = execute_script(scroll_script, true)
+        
+        if result['success'] && result['value']
+          { success: true }.merge(result['value'])
+        else
+          { error: 'Failed to get scroll position' }
+        end
+      end
+
+      def smooth_scroll(direction, distance, duration = 500)
+        return { error: 'Not connected' } unless @connected
+        
+        scroll_script = <<~JS
+          (() => {
+            const startX = window.pageXOffset;
+            const startY = window.pageYOffset;
+            
+            let deltaX = 0, deltaY = 0;
+            const distance = #{distance};
+            
+            switch('#{direction}'.toLowerCase()) {
+              case 'up': deltaY = -distance; break;
+              case 'down': deltaY = distance; break;
+              case 'left': deltaX = -distance; break;
+              case 'right': deltaX = distance; break;
+              default: return { error: 'Invalid direction' };
+            }
+            
+            const startTime = performance.now();
+            const duration = #{duration};
+            
+            function animate(currentTime) {
+              const elapsed = currentTime - startTime;
+              const progress = Math.min(elapsed / duration, 1);
+              
+              // Easing function (ease-out)
+              const easeOut = 1 - Math.pow(1 - progress, 3);
+              
+              window.scrollTo(
+                startX + (deltaX * easeOut),
+                startY + (deltaY * easeOut)
+              );
+              
+              if (progress < 1) {
+                requestAnimationFrame(animate);
+              }
+            }
+            
+            requestAnimationFrame(animate);
+            
+            return { 
+              success: true, 
+              direction: '#{direction}', 
+              distance: distance,
+              duration: duration 
+            };
+          })()
+        JS
+        
+        result = execute_script(scroll_script, true)
+        
+        if result['success'] && result['value']
+          result['value']
+        else
+          { error: 'Failed to perform smooth scroll', direction: direction }
+        end
+      end
+
       private
 
       def get_key_code(key)
