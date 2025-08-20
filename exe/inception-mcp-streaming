@@ -1,0 +1,133 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'optparse'
+require_relative '../lib/inception/mcp'
+
+def show_help
+  puts <<~HELP
+    inception-mcp-streaming - MCP server with streaming HTTP support
+    
+    USAGE:
+        inception-mcp-streaming [options]
+    
+    DESCRIPTION:
+        Enhanced MCP server for Inception browser control with fast-mcp streaming
+        HTTP capabilities. Provides all standard browser tools plus HTTP request
+        proxying through configurable streaming endpoints.
+    
+    OPTIONS:
+        -p, --port PORT         CDP port to connect to (default: auto-detect)
+        -s, --streaming URL     Fast-MCP streaming endpoint URL
+        -h, --help              Show this help message
+        -v, --version           Show version information
+    
+    AVAILABLE TOOLS:
+        Standard browser tools:
+        navigate_browser        Navigate to a URL
+        take_screenshot         Capture page screenshots
+        click_element          Click at coordinates
+        type_text              Type text input
+        press_key              Send keyboard input
+        get_page_content       Extract HTML content
+        get_page_info          Get page details
+        
+        Streaming HTTP tools:
+        streaming_http_request  Make HTTP requests via streaming endpoint
+    
+    SETUP:
+        1. Start Inception browser with CDP:
+           incepti0n serve --show-cdp
+        
+        2. Start streaming MCP server:
+           inception-mcp-streaming --port 9222 --streaming https://api.example.com/streaming
+        
+        3. Add to Claude Desktop config:
+           {
+             "mcpServers": {
+               "inception-browser": {
+                 "command": "inception-mcp-streaming",
+                 "args": ["--port", "9222", "--streaming", "https://api.example.com/streaming"]
+               }
+             }
+           }
+    
+    STREAMING ENDPOINT:
+        When a streaming endpoint is configured, HTTP requests made through the
+        streaming_http_request tool will be proxied through the fast-mcp service.
+        Without a streaming endpoint, requests are made directly.
+        
+        The streaming endpoint should be compatible with the fast-mcp streaming
+        HTTP service: https://github.com/usiegj00/fast-mcp
+    
+    EXAMPLES:
+        # Basic usage with auto-detected CDP port
+        inception-mcp-streaming
+        
+        # Connect to specific CDP port
+        inception-mcp-streaming --port 9222
+        
+        # Enable streaming HTTP through fast-mcp endpoint
+        inception-mcp-streaming --port 9222 --streaming https://api.example.com/streaming
+        
+        # Show help
+        inception-mcp-streaming --help
+    
+    For more information, visit: https://github.com/usiegj00/inception-mcp
+  HELP
+end
+
+options = {
+  cdp_port: nil,
+  streaming_endpoint: nil
+}
+
+begin
+  OptionParser.new do |opts|
+    opts.banner = "Usage: inception-mcp-streaming [options]"
+
+    opts.on("-p", "--port PORT", Integer, "CDP port (default: auto-detect)") do |port|
+      options[:cdp_port] = port
+    end
+
+    opts.on("-s", "--streaming ENDPOINT", String, "Fast-MCP streaming endpoint URL") do |endpoint|
+      options[:streaming_endpoint] = endpoint
+    end
+
+    opts.on("-h", "--help", "Show detailed help") do
+      show_help
+      exit
+    end
+
+    opts.on("-v", "--version", "Show version") do
+      puts "inception-mcp-streaming #{Inception::MCP::VERSION}"
+      puts "MCP server with streaming HTTP support for Inception browser control"
+      exit
+    end
+
+    opts.on("--usage", "Show basic usage") do
+      puts opts
+      exit
+    end
+  end.parse!
+
+rescue OptionParser::InvalidOption => e
+  puts "Error: #{e.message}"
+  puts "Use --help for available options"
+  exit(1)
+end
+
+# Handle no arguments - show basic usage
+if ARGV.empty? && options[:cdp_port].nil? && options[:streaming_endpoint].nil?
+  puts "inception-mcp-streaming #{Inception::MCP::VERSION}"
+  puts "Use --help for detailed information or --usage for options"
+  puts ""
+end
+
+server = Inception::MCP::StreamingServer.new(
+  cdp_port: options[:cdp_port],
+  streaming_endpoint: options[:streaming_endpoint]
+)
+
+success = server.start
+exit(1) unless success

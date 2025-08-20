@@ -2,6 +2,7 @@
 
 require_relative "mcp/version"
 require_relative "mcp/server"
+require_relative "mcp/streaming_server"
 require_relative "mcp/cdp_client"
 require_relative "mcp/tools"
 

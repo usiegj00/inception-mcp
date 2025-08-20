@@ -5,8 +5,8 @@ require_relative "lib/inception/mcp/version"
 Gem::Specification.new do |spec|
   spec.name = "inception-mcp"
   spec.version = Inception::MCP::VERSION
-  spec.authors = ["Inception Team"]
-  spec.email = ["dev@inception.dev"]
+  spec.authors = ["Jonathan Siegel"]
+  spec.email = ["<248302+usiegj00@users.noreply.github.com>"]
 
   spec.summary = "MCP server for Inception browser control"
   spec.description = "Model Context Protocol server that provides AI access to Inception-controlled browsers via CDP"
@@ -19,7 +19,7 @@ Gem::Specification.new do |spec|
   spec.metadata["source_code_uri"] = "https://github.com/usiegj00/inception-mcp"
   spec.metadata["changelog_uri"] = "https://github.com/usiegj00/inception-mcp/blob/main/CHANGELOG.md"
 
-  spec.files = Dir["lib/**/*", "exe/*", "*.gemspec", "README.md", "Gemfile*"]
+  spec.files = Dir["lib/**/*", "exe/*", "*.gemspec", "README.md", "Gemfile*", "spec/**/*", "test_bridge.rb", "Rakefile"]
   spec.bindir = "exe"
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
@@ -31,4 +31,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "bundler", "~> 2.0"
   spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "rspec", "~> 3.0"
+  spec.add_development_dependency "webrick", "~> 1.8"
 end

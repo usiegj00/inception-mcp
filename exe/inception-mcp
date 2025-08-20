@@ -1,15 +1,102 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+require 'optparse'
 require_relative "../lib/inception/mcp"
 
-# Parse command line arguments
-cdp_port = nil
-if ARGV.include?('--port')
-  port_index = ARGV.index('--port')
-  cdp_port = ARGV[port_index + 1].to_i if ARGV[port_index + 1]
+def show_help
+  puts <<~HELP
+    inception-mcp - MCP server for Inception browser control
+    
+    USAGE:
+        inception-mcp [options]
+    
+    DESCRIPTION:
+        Provides AI assistants (Claude, etc.) with browser control capabilities
+        through the Model Context Protocol (MCP). Connects to Inception-controlled
+        browsers via Chrome DevTools Protocol (CDP).
+    
+    OPTIONS:
+        -p, --port PORT     CDP port to connect to (default: auto-detect)
+        -h, --help          Show this help message
+        -v, --version       Show version information
+    
+    AVAILABLE TOOLS:
+        navigate_browser    Navigate to a URL
+        take_screenshot     Capture page screenshots
+        click_element       Click at coordinates
+        type_text          Type text input
+        press_key          Send keyboard input
+        get_page_content   Extract HTML content
+        get_page_info      Get page details
+    
+    SETUP:
+        1. Start Inception browser with CDP:
+           incepti0n serve --show-cdp
+        
+        2. Start MCP server:
+           inception-mcp --port 9222
+        
+        3. Add to Claude Desktop config:
+           {
+             "mcpServers": {
+               "inception-browser": {
+                 "command": "inception-mcp",
+                 "args": ["--port", "9222"]
+               }
+             }
+           }
+    
+    EXAMPLES:
+        inception-mcp                    # Auto-detect CDP port
+        inception-mcp --port 9222        # Connect to specific port
+        inception-mcp --help             # Show this help
+    
+    For more information, visit: https://github.com/usiegj00/inception-mcp
+  HELP
+end
+
+options = { cdp_port: nil }
+
+begin
+  OptionParser.new do |opts|
+    opts.banner = "Usage: inception-mcp [options]"
+
+    opts.on("-p", "--port PORT", Integer, "CDP port (default: auto-detect)") do |port|
+      options[:cdp_port] = port
+    end
+
+    opts.on("-h", "--help", "Show detailed help") do
+      show_help
+      exit
+    end
+
+    opts.on("-v", "--version", "Show version") do
+      puts "inception-mcp #{Inception::MCP::VERSION}"
+      puts "MCP server for Inception browser control"
+      exit
+    end
+
+    opts.on("--usage", "Show basic usage") do
+      puts opts
+      exit
+    end
+  end.parse!
+
+rescue OptionParser::InvalidOption => e
+  puts "Error: #{e.message}"
+  puts "Use --help for available options"
+  exit(1)
+end
+
+# Handle no arguments - show basic usage
+if ARGV.empty? && options[:cdp_port].nil?
+  STDERR.puts "inception-mcp #{Inception::MCP::VERSION}"
+  STDERR.puts "Use --help for detailed information or --usage for options"
+  STDERR.puts ""
 end
 
 # Start the MCP server
-server = Inception::MCP::Server.new(cdp_port: cdp_port)
-server.start
+server = Inception::MCP::Server.new(cdp_port: options[:cdp_port])
+success = server.start
+exit(1) unless success

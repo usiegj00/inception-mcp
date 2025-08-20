@@ -914,6 +914,162 @@ module Inception
         end
       end
 
+      def resize_window(width, height)
+        return { error: 'Not connected' } unless @connected
+        
+        # First get the current window bounds to maintain position
+        current_bounds = get_window_bounds
+        
+        if current_bounds['success']
+          # Set new window bounds with specified width and height
+          new_bounds = {
+            left: current_bounds['left'],
+            top: current_bounds['top'],
+            width: width,
+            height: height,
+            windowState: current_bounds['windowState']
+          }
+          
+          result = send_command_and_wait('Browser.setWindowBounds', {
+            windowId: get_window_id,
+            bounds: new_bounds
+          }, 5)
+          
+          if result && !result['error']
+            {
+              success: true,
+              width: width,
+              height: height,
+              previous: {
+                width: current_bounds['width'],
+                height: current_bounds['height']
+              }
+            }
+          else
+            { error: 'Failed to resize window', details: result&.dig('error') }
+          end
+        else
+          current_bounds
+        end
+      end
+
+      def get_window_bounds
+        return { error: 'Not connected' } unless @connected
+        
+        window_id = get_window_id
+        result = send_command_and_wait('Browser.getWindowBounds', {
+          windowId: window_id
+        }, 5)
+        
+        if result && result['result'] && result['result']['bounds']
+          bounds = result['result']['bounds']
+          {
+            success: true,
+            left: bounds['left'],
+            top: bounds['top'],
+            width: bounds['width'],
+            height: bounds['height'],
+            windowState: bounds['windowState']
+          }
+        else
+          { error: 'Failed to get window bounds' }
+        end
+      end
+
+      def maximize_window
+        return { error: 'Not connected' } unless @connected
+        
+        window_id = get_window_id
+        result = send_command_and_wait('Browser.setWindowBounds', {
+          windowId: window_id,
+          bounds: { windowState: 'maximized' }
+        }, 5)
+        
+        if result && !result['error']
+          { success: true, state: 'maximized' }
+        else
+          { error: 'Failed to maximize window' }
+        end
+      end
+
+      def minimize_window
+        return { error: 'Not connected' } unless @connected
+        
+        window_id = get_window_id
+        result = send_command_and_wait('Browser.setWindowBounds', {
+          windowId: window_id,
+          bounds: { windowState: 'minimized' }
+        }, 5)
+        
+        if result && !result['error']
+          { success: true, state: 'minimized' }
+        else
+          { error: 'Failed to minimize window' }
+        end
+      end
+
+      def restore_window
+        return { error: 'Not connected' } unless @connected
+        
+        window_id = get_window_id
+        result = send_command_and_wait('Browser.setWindowBounds', {
+          windowId: window_id,
+          bounds: { windowState: 'normal' }
+        }, 5)
+        
+        if result && !result['error']
+          { success: true, state: 'normal' }
+        else
+          { error: 'Failed to restore window' }
+        end
+      end
+
+      def set_window_position(x, y)
+        return { error: 'Not connected' } unless @connected
+        
+        # Get current dimensions to preserve them
+        current_bounds = get_window_bounds
+        
+        if current_bounds['success']
+          new_bounds = {
+            left: x,
+            top: y,
+            width: current_bounds['width'],
+            height: current_bounds['height'],
+            windowState: 'normal'
+          }
+          
+          result = send_command_and_wait('Browser.setWindowBounds', {
+            windowId: get_window_id,
+            bounds: new_bounds
+          }, 5)
+          
+          if result && !result['error']
+            {
+              success: true,
+              x: x,
+              y: y,
+              previous: {
+                x: current_bounds['left'],
+                y: current_bounds['top']
+              }
+            }
+          else
+            { error: 'Failed to set window position' }
+          end
+        else
+          current_bounds
+        end
+      end
+
+      private
+
+      def get_window_id
+        # Get the window ID for the current browser window
+        # This is a simplified approach - in practice, you might need to track window IDs
+        1 # Chrome typically uses window ID 1 for the main window
+      end
+
       private
 
       def get_key_code(key)
@@ -1165,11 +1321,12 @@ module Inception
               column: result['result']['exceptionDetails']['columnNumber']
             }
           else
-            {
+            response_hash = {
               success: true,
-              result: result['result']['result'],
-              value: result['result']['result']['value'] if return_value
+              result: result['result']['result']
             }
+            response_hash[:value] = result['result']['result']['value'] if return_value
+            response_hash
           end
         else
           { error: 'Failed to execute script', details: result&.dig('error') }

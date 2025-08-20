@@ -544,6 +544,90 @@ module Inception
               required: ["direction", "distance"],
               additionalProperties: false
             }
+          },
+          {
+            name: "resize_window",
+            title: "Resize Browser Window",
+            description: "Resize the browser window to specific width and height dimensions. Maintains current window position.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                width: {
+                  type: "number",
+                  minimum: 100,
+                  description: "New window width in pixels"
+                },
+                height: {
+                  type: "number",
+                  minimum: 100,
+                  description: "New window height in pixels"
+                }
+              },
+              required: ["width", "height"],
+              additionalProperties: false
+            }
+          },
+          {
+            name: "maximize_window",
+            title: "Maximize Browser Window",
+            description: "Maximize the browser window to full screen size.",
+            inputSchema: {
+              type: "object",
+              properties: {},
+              additionalProperties: false
+            }
+          },
+          {
+            name: "minimize_window",
+            title: "Minimize Browser Window",
+            description: "Minimize the browser window.",
+            inputSchema: {
+              type: "object",
+              properties: {},
+              additionalProperties: false
+            }
+          },
+          {
+            name: "restore_window",
+            title: "Restore Browser Window",
+            description: "Restore the browser window from maximized or minimized state to normal size.",
+            inputSchema: {
+              type: "object",
+              properties: {},
+              additionalProperties: false
+            }
+          },
+          {
+            name: "get_window_bounds",
+            title: "Get Window Bounds",
+            description: "Get the current browser window position, size, and state information.",
+            inputSchema: {
+              type: "object",
+              properties: {},
+              additionalProperties: false
+            }
+          },
+          {
+            name: "set_window_position",
+            title: "Set Window Position",
+            description: "Move the browser window to specific screen coordinates.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                x: {
+                  type: "number",
+                  minimum: 0,
+                  description: "X position in pixels from left edge of screen"
+                },
+                y: {
+                  type: "number",
+                  minimum: 0,
+                  description: "Y position in pixels from top edge of screen"
+                }
+              },
+              required: ["x", "y"],
+              additionalProperties: false
+            }
           }
         ]
       end
@@ -1516,6 +1600,159 @@ module Inception
                 {
                   type: "text",
                   text: "Failed to smooth scroll: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "resize_window"
+          width = arguments["width"]
+          height = arguments["height"]
+          result = @cdp.resize_window(width, height)
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully resized window to #{result['width']}x#{result['height']}"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to resize window: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "maximize_window"
+          result = @cdp.maximize_window
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully maximized window"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to maximize window: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "minimize_window"
+          result = @cdp.minimize_window
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully minimized window"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to minimize window: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "restore_window"
+          result = @cdp.restore_window
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully restored window to normal state"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to restore window: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "get_window_bounds"
+          result = @cdp.get_window_bounds
+          
+          if result["success"]
+            output_text = "Window Bounds:\n"
+            output_text += "Position: (#{result['left']}, #{result['top']})\n"
+            output_text += "Size: #{result['width']}x#{result['height']}\n"
+            output_text += "State: #{result['windowState']}"
+            
+            {
+              content: [
+                {
+                  type: "text",
+                  text: output_text
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to get window bounds: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "set_window_position"
+          x = arguments["x"]
+          y = arguments["y"]
+          result = @cdp.set_window_position(x, y)
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully moved window to position (#{result['x']}, #{result['y']})"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to set window position: #{result['error']}"
                 }
               ],
               isError: true

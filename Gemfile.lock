@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    inception-mcp (0.1.0)
+    inception-mcp (0.2.0)
       json (~> 2.6)
       thor (~> 1.0)
       websocket-client-simple (~> 0.6)
@@ -29,6 +29,7 @@ GEM
       rspec-support (~> 3.13.0)
     rspec-support (3.13.5)
     thor (1.4.0)
+    webrick (1.9.1)
     websocket (1.2.11)
     websocket-client-simple (0.9.0)
       base64
@@ -45,6 +46,7 @@ DEPENDENCIES
   inception-mcp!
   rake (~> 13.0)
   rspec (~> 3.0)
+  webrick (~> 1.8)
 
 BUNDLED WITH
    2.7.1

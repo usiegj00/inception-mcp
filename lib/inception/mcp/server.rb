@@ -19,10 +19,11 @@ module Inception
         
         if connected
           @tools = Tools.new(@cdp_client)
-          puts "MCP Server connected to Inception browser on port #{@cdp_port}"
+          STDERR.puts "MCP Server connected to Inception browser on port #{@cdp_port}"
           run_stdio_loop
+          true
         else
-          puts "Failed to connect to browser on port #{@cdp_port}"
+          STDERR.puts "Failed to connect to browser on port #{@cdp_port}"
           false
         end
       end
@@ -33,12 +34,12 @@ module Inception
         # Try common ports where Inception might be running CDP
         [9222, 9223, 9224, 9225].each do |port|
           if port_available?(port)
-            puts "Found potential CDP endpoint on port #{port}"
+            STDERR.puts "Found potential CDP endpoint on port #{port}"
             return port
           end
         end
         
-        puts "No CDP endpoint found. Make sure Inception browser is running."
+        STDERR.puts "No CDP endpoint found. Make sure Inception browser is running."
         nil
       end
 
@@ -53,24 +54,6 @@ module Inception
 
       def run_stdio_loop
         STDOUT.sync = true
-        
-        # Send initial handshake
-        send_response({
-          jsonrpc: "2.0",
-          id: nil,
-          result: {
-            protocolVersion: "2024-11-05",
-            capabilities: {
-              tools: {
-                listChanged: false
-              }
-            },
-            serverInfo: {
-              name: "inception-mcp",
-              version: VERSION
-            }
-          }
-        })
 
         STDIN.each_line do |line|
           begin
@@ -97,14 +80,15 @@ module Inception
             result: {
               protocolVersion: "2024-11-05",
               capabilities: {
-                tools: {
-                  listChanged: false
-                }
+                tools: {},
+                resources: {},
+                prompts: {}
               },
               serverInfo: {
                 name: "inception-mcp",
                 version: VERSION
-              }
+              },
+              instructions: "MCP server for controlling Inception browser. Provides tools for web automation including navigation, screenshots, clicking, typing, and content extraction. Connect to an Inception browser instance via Chrome DevTools Protocol (CDP) to enable AI-driven web browsing and testing."
             }
           })
 
@@ -127,6 +111,9 @@ module Inception
             id: id,
             result: result
           })
+
+        when 'initialized'
+          # Client confirms initialization is complete - no response needed
 
         when 'ping'
           send_response({

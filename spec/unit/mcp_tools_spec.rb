@@ -11,7 +11,7 @@ RSpec.describe Inception::MCP::Tools do
       definitions = tools.tool_definitions
       
       expect(definitions).to be_an(Array)
-      expect(definitions.length).to eq(33)
+      expect(definitions.length).to eq(39)
       
       tool_names = definitions.map { |tool| tool[:name] }
       expected_tools = [
@@ -47,7 +47,13 @@ RSpec.describe Inception::MCP::Tools do
         'scroll_to_element',
         'scroll_to_coordinates',
         'get_scroll_position',
-        'smooth_scroll'
+        'smooth_scroll',
+        'resize_window',
+        'maximize_window',
+        'minimize_window',
+        'restore_window',
+        'get_window_bounds',
+        'set_window_position'
       ]
       
       expect(tool_names).to match_array(expected_tools)
