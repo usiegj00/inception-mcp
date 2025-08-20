@@ -692,7 +692,7 @@ module Inception
             selector = arguments["selector"]
             result = @cdp.click_element_by_selector(selector)
             
-            if result["success"]
+            if result && result["success"]
               {
                 content: [
                   {
@@ -702,11 +702,17 @@ module Inception
                 ]
               }
             else
+              error_message = if result.nil?
+                "CDP communication failed - browser may not be connected"
+              else
+                "#{result['error'] || 'Unknown error'}"
+              end
+              
               {
                 content: [
                   {
                     type: "text",
-                    text: "Failed to click element '#{selector}': #{result['error']}"
+                    text: "Failed to click element '#{selector}': #{error_message}"
                   }
                 ],
                 isError: true

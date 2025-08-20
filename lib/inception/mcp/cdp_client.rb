@@ -404,14 +404,31 @@ module Inception
         # JavaScript to find element and get its center coordinates
         js_expression = <<~JS
           (() => {
-            const element = document.querySelector('#{selector.gsub("'", "\\'")}');
+            const selector = '#{selector.gsub("'", "\\'")}';
+            let element;
+            
+            // Handle :contains() pseudo-selector (jQuery-style)
+            if (selector.includes(':contains(')) {
+              const match = selector.match(/(.+?):contains\\((['"]?)(.+?)\\2\\)/);
+              if (match) {
+                const baseSelector = match[1];
+                const searchText = match[3];
+                const elements = document.querySelectorAll(baseSelector);
+                element = Array.from(elements).find(el => 
+                  el.textContent && el.textContent.includes(searchText)
+                );
+              }
+            } else {
+              element = document.querySelector(selector);
+            }
+            
             if (!element) {
-              return { error: 'Element not found', selector: '#{selector.gsub("'", "\\'")}' };
+              return { error: 'Element not found', selector: selector };
             }
             
             const rect = element.getBoundingClientRect();
             if (rect.width === 0 || rect.height === 0) {
-              return { error: 'Element not visible', selector: '#{selector.gsub("'", "\\'")}' };
+              return { error: 'Element not visible', selector: selector };
             }
             
             return {
@@ -432,6 +449,11 @@ module Inception
         if response && response['result'] && response['result']['result']
           result = response['result']['result']['value']
           
+          # Handle case where result is nil or not a hash
+          unless result.is_a?(Hash)
+            return { error: 'JavaScript evaluation returned invalid result', selector: selector, result: result.inspect }
+          end
+          
           if result['success']
             # Click at the calculated coordinates
             click_element(result['x'], result['y'])
@@ -440,7 +462,9 @@ module Inception
             result
           end
         else
-          { error: 'Failed to evaluate selector', selector: selector }
+          error_details = response&.dig('result', 'exceptionDetails')
+          error_msg = error_details ? "JavaScript error: #{error_details['text']}" : 'Failed to evaluate selector'
+          { error: error_msg, selector: selector }
         end
       end
 
