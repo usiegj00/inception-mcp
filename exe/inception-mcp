@@ -1,0 +1,15 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require_relative "../lib/inception/mcp"
+
+# Parse command line arguments
+cdp_port = nil
+if ARGV.include?('--port')
+  port_index = ARGV.index('--port')
+  cdp_port = ARGV[port_index + 1].to_i if ARGV[port_index + 1]
+end
+
+# Start the MCP server
+server = Inception::MCP::Server.new(cdp_port: cdp_port)
+server.start
