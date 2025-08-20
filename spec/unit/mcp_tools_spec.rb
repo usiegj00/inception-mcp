@@ -11,7 +11,7 @@ RSpec.describe Inception::MCP::Tools do
       definitions = tools.tool_definitions
       
       expect(definitions).to be_an(Array)
-      expect(definitions.length).to eq(8)
+      expect(definitions.length).to eq(11)
       
       tool_names = definitions.map { |tool| tool[:name] }
       expected_tools = [
@@ -22,7 +22,10 @@ RSpec.describe Inception::MCP::Tools do
         'press_key',
         'get_page_content',
         'get_page_info',
-        'get_interactive_elements'
+        'get_interactive_elements',
+        'fill_form_field',
+        'select_option',
+        'check_checkbox'
       ]
       
       expect(tool_names).to match_array(expected_tools)
@@ -197,6 +200,68 @@ RSpec.describe Inception::MCP::Tools do
         expect(result[:content].first[:text]).to include('Failed to click element')
         expect(result).to have_key(:isError)
         expect(result[:isError]).to be true
+      end
+    end
+
+    describe 'form filling tools' do
+      describe 'fill_form_field' do
+        it 'fills form field successfully' do
+          mock_result = { 'success' => true, 'selector' => '#email', 'value' => 'test@example.com' }
+          expect(mock_cdp_client).to receive(:fill_form_field).with('#email', 'test@example.com').and_return(mock_result)
+          
+          result = tools.execute_tool('fill_form_field', { 'selector' => '#email', 'value' => 'test@example.com' })
+          
+          expect(result).to have_key(:content)
+          expect(result[:content].first[:text]).to include('Successfully filled form field')
+          expect(result[:content].first[:text]).to include('#email')
+        end
+
+        it 'returns error when form field filling fails' do
+          mock_result = { 'error' => 'Element not found', 'selector' => '#missing' }
+          expect(mock_cdp_client).to receive(:fill_form_field).with('#missing', 'test').and_return(mock_result)
+          
+          result = tools.execute_tool('fill_form_field', { 'selector' => '#missing', 'value' => 'test' })
+          
+          expect(result).to have_key(:content)
+          expect(result[:content].first[:text]).to include('Failed to fill form field')
+          expect(result).to have_key(:isError)
+          expect(result[:isError]).to be true
+        end
+      end
+
+      describe 'select_option' do
+        it 'selects option successfully' do
+          mock_result = { 'success' => true, 'selector' => '#country', 'selectedValue' => 'us', 'selectedText' => 'United States' }
+          expect(mock_cdp_client).to receive(:select_option).with('#country', 'us').and_return(mock_result)
+          
+          result = tools.execute_tool('select_option', { 'selector' => '#country', 'value' => 'us' })
+          
+          expect(result).to have_key(:content)
+          expect(result[:content].first[:text]).to include('Successfully selected')
+          expect(result[:content].first[:text]).to include('United States')
+        end
+      end
+
+      describe 'check_checkbox' do
+        it 'checks checkbox successfully' do
+          mock_result = { 'success' => true, 'selector' => '#agree', 'checked' => true, 'type' => 'checkbox' }
+          expect(mock_cdp_client).to receive(:check_checkbox).with('#agree', true).and_return(mock_result)
+          
+          result = tools.execute_tool('check_checkbox', { 'selector' => '#agree', 'checked' => true })
+          
+          expect(result).to have_key(:content)
+          expect(result[:content].first[:text]).to include('Successfully checked checkbox')
+        end
+
+        it 'unchecks checkbox successfully' do
+          mock_result = { 'success' => true, 'selector' => '#newsletter', 'checked' => false, 'type' => 'checkbox' }
+          expect(mock_cdp_client).to receive(:check_checkbox).with('#newsletter', false).and_return(mock_result)
+          
+          result = tools.execute_tool('check_checkbox', { 'selector' => '#newsletter', 'checked' => false })
+          
+          expect(result).to have_key(:content)
+          expect(result[:content].first[:text]).to include('Successfully unchecked checkbox')
+        end
       end
     end
 

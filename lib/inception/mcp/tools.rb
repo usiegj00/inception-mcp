@@ -138,6 +138,67 @@ module Inception
               properties: {},
               additionalProperties: false
             }
+          },
+          {
+            name: "fill_form_field",
+            title: "Fill Form Field",
+            description: "Fill a form input field, textarea, or other editable element with text. Automatically focuses the element and clears existing content before typing.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                selector: {
+                  type: "string",
+                  description: "CSS selector for the form field to fill (e.g., '#email-input', 'input[name=\"username\"]')"
+                },
+                value: {
+                  type: "string", 
+                  description: "The text value to enter into the field"
+                }
+              },
+              required: ["selector", "value"],
+              additionalProperties: false
+            }
+          },
+          {
+            name: "select_option",
+            title: "Select Dropdown Option",
+            description: "Select an option from a dropdown/select element. Can select by option value or visible text.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                selector: {
+                  type: "string",
+                  description: "CSS selector for the select element (e.g., '#country-select', 'select[name=\"category\"]')"
+                },
+                value: {
+                  type: "string",
+                  description: "The option value or visible text to select"
+                }
+              },
+              required: ["selector", "value"],
+              additionalProperties: false
+            }
+          },
+          {
+            name: "check_checkbox",
+            title: "Check/Uncheck Checkbox",
+            description: "Check or uncheck a checkbox or radio button element.",
+            inputSchema: {
+              type: "object", 
+              properties: {
+                selector: {
+                  type: "string",
+                  description: "CSS selector for the checkbox or radio button (e.g., '#agree-terms', 'input[name=\"newsletter\"]')"
+                },
+                checked: {
+                  type: "boolean",
+                  description: "Whether to check (true) or uncheck (false) the element",
+                  default: true
+                }
+              },
+              required: ["selector"],
+              additionalProperties: false
+            }
           }
         ]
       end
@@ -346,6 +407,85 @@ module Inception
                   text: "No interactive elements found on the current page"
                 }
               ]
+            }
+          end
+
+        when "fill_form_field"
+          selector = arguments["selector"]
+          value = arguments["value"]
+          result = @cdp.fill_form_field(selector, value)
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully filled form field '#{selector}' with: #{result['value']}"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to fill form field '#{selector}': #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "select_option"
+          selector = arguments["selector"]
+          value = arguments["value"]
+          result = @cdp.select_option(selector, value)
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully selected '#{result['selectedText']}' (value: #{result['selectedValue']}) in '#{selector}'"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to select option in '#{selector}': #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "check_checkbox"
+          selector = arguments["selector"]
+          checked = arguments.fetch("checked", true)
+          result = @cdp.check_checkbox(selector, checked)
+          
+          if result["success"]
+            action = result["checked"] ? "checked" : "unchecked"
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully #{action} #{result['type']} '#{selector}'"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to modify #{selector}: #{result['error']}"
+                }
+              ],
+              isError: true
             }
           end
 

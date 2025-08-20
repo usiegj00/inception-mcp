@@ -262,6 +262,181 @@ module Inception
         end
       end
 
+      def fill_form_field(selector, value)
+        # First focus on the element
+        focus_result = focus_element(selector)
+        return focus_result unless focus_result['success']
+        
+        # Clear existing content
+        clear_result = clear_element(selector)
+        return clear_result unless clear_result['success']
+        
+        # Type the new value
+        type_text(value.to_s)
+        
+        { success: true, selector: selector, value: value.to_s }
+      end
+
+      def select_option(selector, value)
+        js_expression = <<~JS
+          (() => {
+            const select = document.querySelector('#{selector.gsub("'", "\\'")}');
+            if (!select) {
+              return { error: 'Select element not found', selector: '#{selector.gsub("'", "\\'")}' };
+            }
+            
+            if (select.tagName.toLowerCase() !== 'select') {
+              return { error: 'Element is not a select', selector: '#{selector.gsub("'", "\\'")}' };
+            }
+            
+            const value = '#{value.to_s.gsub("'", "\\'")}';
+            let optionFound = false;
+            
+            // Try to find option by value first
+            for (let option of select.options) {
+              if (option.value === value) {
+                select.selectedIndex = option.index;
+                optionFound = true;
+                break;
+              }
+            }
+            
+            // If not found by value, try by text content
+            if (!optionFound) {
+              for (let option of select.options) {
+                if (option.textContent.trim() === value) {
+                  select.selectedIndex = option.index;
+                  optionFound = true;
+                  break;
+                }
+              }
+            }
+            
+            if (!optionFound) {
+              return { error: 'Option not found', selector: '#{selector.gsub("'", "\\'")}', value: value };
+            }
+            
+            // Trigger change event
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            return { 
+              success: true, 
+              selector: '#{selector.gsub("'", "\\'")}', 
+              selectedValue: select.value,
+              selectedText: select.options[select.selectedIndex].textContent.trim()
+            };
+          })()
+        JS
+
+        response = send_command_and_wait('Runtime.evaluate', {
+          expression: js_expression,
+          returnByValue: true
+        }, 10)
+        
+        if response && response['result'] && response['result']['result']
+          response['result']['result']['value']
+        else
+          { error: 'Failed to evaluate select operation', selector: selector }
+        end
+      end
+
+      def check_checkbox(selector, checked = true)
+        js_expression = <<~JS
+          (() => {
+            const element = document.querySelector('#{selector.gsub("'", "\\'")}');
+            if (!element) {
+              return { error: 'Checkbox element not found', selector: '#{selector.gsub("'", "\\'")}' };
+            }
+            
+            const inputType = element.type ? element.type.toLowerCase() : '';
+            if (inputType !== 'checkbox' && inputType !== 'radio') {
+              return { error: 'Element is not a checkbox or radio button', selector: '#{selector.gsub("'", "\\'")}' };
+            }
+            
+            const shouldBeChecked = #{checked};
+            if (element.checked !== shouldBeChecked) {
+              element.checked = shouldBeChecked;
+              element.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            
+            return { 
+              success: true, 
+              selector: '#{selector.gsub("'", "\\'")}', 
+              checked: element.checked,
+              type: inputType
+            };
+          })()
+        JS
+
+        response = send_command_and_wait('Runtime.evaluate', {
+          expression: js_expression,
+          returnByValue: true
+        }, 10)
+        
+        if response && response['result'] && response['result']['result']
+          response['result']['result']['value']
+        else
+          { error: 'Failed to evaluate checkbox operation', selector: selector }
+        end
+      end
+
+      private
+
+      def focus_element(selector)
+        js_expression = <<~JS
+          (() => {
+            const element = document.querySelector('#{selector.gsub("'", "\\'")}');
+            if (!element) {
+              return { error: 'Element not found', selector: '#{selector.gsub("'", "\\'")}' };
+            }
+            
+            element.focus();
+            return { success: true, selector: '#{selector.gsub("'", "\\'")}' };
+          })()
+        JS
+
+        response = send_command_and_wait('Runtime.evaluate', {
+          expression: js_expression,
+          returnByValue: true
+        }, 10)
+        
+        if response && response['result'] && response['result']['result']
+          response['result']['result']['value']
+        else
+          { error: 'Failed to focus element', selector: selector }
+        end
+      end
+
+      def clear_element(selector)
+        js_expression = <<~JS
+          (() => {
+            const element = document.querySelector('#{selector.gsub("'", "\\'")}');
+            if (!element) {
+              return { error: 'Element not found', selector: '#{selector.gsub("'", "\\'")}' };
+            }
+            
+            if (element.tagName.toLowerCase() === 'input' || element.tagName.toLowerCase() === 'textarea') {
+              element.value = '';
+              element.dispatchEvent(new Event('input', { bubbles: true }));
+              return { success: true, selector: '#{selector.gsub("'", "\\'")}' };
+            }
+            
+            return { error: 'Element is not a text input', selector: '#{selector.gsub("'", "\\'")}' };
+          })()
+        JS
+
+        response = send_command_and_wait('Runtime.evaluate', {
+          expression: js_expression,
+          returnByValue: true
+        }, 10)
+        
+        if response && response['result'] && response['result']['result']
+          response['result']['result']['value']
+        else
+          { error: 'Failed to clear element', selector: selector }
+        end
+      end
+
       def press_key(key)
         # Map common keys to their codes
         key_codes = {
