@@ -110,6 +110,39 @@ module Inception
             }
           },
           {
+            name: "press_key_combination",
+            title: "Press Key Combination",
+            description: "Send keyboard shortcut combinations like Ctrl+C, Ctrl+Shift+T, etc. Supports modifier keys and complex shortcuts.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                keys: {
+                  type: "string",
+                  description: "Key combination like 'Ctrl+C', 'Ctrl+Shift+T', 'Alt+F4', 'Cmd+R' (use + to separate keys)",
+                  examples: ["Ctrl+C", "Ctrl+V", "Ctrl+Shift+T", "Alt+F4", "Cmd+R"]
+                }
+              },
+              required: ["keys"],
+              additionalProperties: false
+            }
+          },
+          {
+            name: "send_text_with_shortcuts",
+            title: "Send Text with Shortcuts",
+            description: "Send text that may contain embedded keyboard shortcuts in curly braces. Example: 'Hello {Ctrl+A} World {Enter}'",
+            inputSchema: {
+              type: "object",
+              properties: {
+                text: {
+                  type: "string",
+                  description: "Text with optional shortcuts in curly braces like 'Hello {Ctrl+A} World {Enter}'"
+                }
+              },
+              required: ["text"],
+              additionalProperties: false
+            }
+          },
+          {
             name: "get_page_content",
             title: "Extract Page Content",
             description: "Extract the complete HTML source code of the currently loaded page. Useful for content analysis, scraping, debugging, or understanding page structure.",
@@ -460,6 +493,56 @@ module Inception
               }
             ]
           }
+
+        when "press_key_combination"
+          keys = arguments["keys"]
+          result = @cdp.press_key_combination(keys)
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully pressed key combination: #{result['combination']}"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to press key combination '#{keys}': #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "send_text_with_shortcuts"
+          text = arguments["text"]
+          result = @cdp.send_text_with_shortcuts(text)
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully sent text with shortcuts: #{result['text']}"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to send text with shortcuts: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
 
         when "get_page_content"
           html_content = @cdp.get_page_content

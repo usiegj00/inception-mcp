@@ -638,7 +638,15 @@ module Inception
           'ArrowUp' => 38,
           'ArrowDown' => 40,
           'ArrowLeft' => 37,
-          'ArrowRight' => 39
+          'ArrowRight' => 39,
+          'Delete' => 46,
+          'Home' => 36,
+          'End' => 35,
+          'PageUp' => 33,
+          'PageDown' => 34,
+          'F1' => 112, 'F2' => 113, 'F3' => 114, 'F4' => 115,
+          'F5' => 116, 'F6' => 117, 'F7' => 118, 'F8' => 119,
+          'F9' => 120, 'F10' => 121, 'F11' => 122, 'F12' => 123
         }
 
         code = key_codes[key] || key.ord
@@ -652,6 +660,112 @@ module Inception
           type: 'keyUp', 
           keyCode: code
         })
+      end
+
+      def press_key_combination(keys)
+        # Support for key combinations like "Ctrl+C", "Ctrl+Shift+T", etc.
+        key_parts = keys.split('+').map(&:strip)
+        
+        # Map modifier keys
+        modifiers = {
+          'Ctrl' => { key: 'Control', code: 17 },
+          'Control' => { key: 'Control', code: 17 },
+          'Shift' => { key: 'Shift', code: 16 },
+          'Alt' => { key: 'Alt', code: 18 },
+          'Meta' => { key: 'Meta', code: 91 },  # Cmd on Mac
+          'Cmd' => { key: 'Meta', code: 91 }
+        }
+        
+        # Separate modifiers from the main key
+        modifier_keys = []
+        main_key = key_parts.last
+        
+        key_parts[0..-2].each do |mod|
+          if modifiers[mod]
+            modifier_keys << modifiers[mod]
+          end
+        end
+        
+        # Press modifier keys down
+        modifier_keys.each do |mod|
+          send_command('Input.dispatchKeyEvent', {
+            type: 'keyDown',
+            key: mod[:key],
+            code: mod[:key],
+            keyCode: mod[:code]
+          })
+        end
+        
+        # Press main key
+        main_code = get_key_code(main_key)
+        send_command('Input.dispatchKeyEvent', {
+          type: 'keyDown',
+          key: main_key,
+          keyCode: main_code
+        })
+        
+        send_command('Input.dispatchKeyEvent', {
+          type: 'keyUp',
+          key: main_key,
+          keyCode: main_code
+        })
+        
+        # Release modifier keys
+        modifier_keys.reverse.each do |mod|
+          send_command('Input.dispatchKeyEvent', {
+            type: 'keyUp',
+            key: mod[:key],
+            code: mod[:key],
+            keyCode: mod[:code]
+          })
+        end
+        
+        { success: true, combination: keys }
+      rescue => e
+        { error: "Failed to press key combination: #{e.message}", combination: keys }
+      end
+
+      def send_text_with_shortcuts(text)
+        # Send text that may contain shortcuts in curly braces like "Hello {Ctrl+A} world"
+        parts = text.split(/(\{[^}]+\})/)
+        
+        parts.each do |part|
+          if part.start_with?('{') && part.end_with?('}')
+            # This is a shortcut
+            shortcut = part[1..-2]  # Remove curly braces
+            if shortcut.include?('+')
+              press_key_combination(shortcut)
+            else
+              press_key(shortcut)
+            end
+          else
+            # This is regular text
+            type_text(part) unless part.empty?
+          end
+        end
+        
+        { success: true, text: text }
+      end
+
+      private
+
+      def get_key_code(key)
+        key_codes = {
+          'Enter' => 13, 'Backspace' => 8, 'Tab' => 9, 'Escape' => 27,
+          'ArrowUp' => 38, 'ArrowDown' => 40, 'ArrowLeft' => 37, 'ArrowRight' => 39,
+          'Delete' => 46, 'Home' => 36, 'End' => 35, 'PageUp' => 33, 'PageDown' => 34,
+          'F1' => 112, 'F2' => 113, 'F3' => 114, 'F4' => 115,
+          'F5' => 116, 'F6' => 117, 'F7' => 118, 'F8' => 119,
+          'F9' => 120, 'F10' => 121, 'F11' => 122, 'F12' => 123,
+          ' ' => 32, 'Space' => 32
+        }
+        
+        # Handle single characters
+        if key.length == 1
+          return key.upcase.ord
+        end
+        
+        key_codes[key] || key.ord
       end
 
       def get_tabs_info
