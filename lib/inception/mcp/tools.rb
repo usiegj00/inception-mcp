@@ -130,6 +130,36 @@ module Inception
             }
           },
           {
+            name: "get_page_text",
+            title: "Get Page Text Content",
+            description: "Extract clean text content from the page, removing scripts, styles, and hidden elements. Returns text with word/character counts.",
+            inputSchema: {
+              type: "object",
+              properties: {},
+              additionalProperties: false
+            }
+          },
+          {
+            name: "get_structured_content",
+            title: "Get Structured Page Content",
+            description: "Extract structured content including headings, links, images, forms, lists, and tables. Useful for content analysis and understanding page structure.",
+            inputSchema: {
+              type: "object",
+              properties: {},
+              additionalProperties: false
+            }
+          },
+          {
+            name: "get_page_metadata",
+            title: "Get Page Metadata",
+            description: "Extract page metadata including title, description, keywords, Open Graph data, Twitter Cards, and other meta information.",
+            inputSchema: {
+              type: "object",
+              properties: {},
+              additionalProperties: false
+            }
+          },
+          {
             name: "get_interactive_elements",
             title: "Get Interactive Elements",
             description: "Find all interactive elements on the current page with their positions, selectors, and metadata. Useful for identifying clickable elements, forms, and buttons for automation.",
@@ -432,16 +462,28 @@ module Inception
           }
 
         when "get_page_content"
-          request_id = @cdp.get_page_content
+          html_content = @cdp.get_page_content
           
-          {
-            content: [
-              {
-                type: "text",
-                text: "Page content request sent (request ID: #{request_id}). In a full implementation, this would return the HTML content."
-              }
-            ]
-          }
+          if html_content
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "HTML Content:\n#{html_content}"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to retrieve page content"
+                }
+              ],
+              isError: true
+            }
+          end
 
         when "get_page_info"
           tabs = @cdp.get_tabs_info
@@ -464,6 +506,150 @@ module Inception
                   text: "No page information available"
                 }
               ]
+            }
+          end
+
+        when "get_page_text"
+          text_data = @cdp.get_page_text_content
+          
+          if text_data
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Page Text Content:\nTitle: #{text_data['title']}\nURL: #{text_data['url']}\nWord Count: #{text_data['wordCount']}\nCharacter Count: #{text_data['characterCount']}\n\nContent:\n#{text_data['textContent']}"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to extract page text content"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "get_structured_content"
+          content_data = @cdp.get_structured_content
+          
+          if content_data
+            output_text = "Structured Content Analysis:\n\n"
+            output_text += "Title: #{content_data['title']}\n"
+            output_text += "URL: #{content_data['url']}\n\n"
+            
+            if content_data['headings'].any?
+              output_text += "Headings (#{content_data['headings'].length}):\n"
+              content_data['headings'].each do |heading|
+                output_text += "  H#{heading['level']}: #{heading['text']}\n"
+              end
+              output_text += "\n"
+            end
+            
+            if content_data['links'].any?
+              output_text += "Links (#{content_data['links'].length}):\n"
+              content_data['links'].first(10).each do |link|
+                output_text += "  #{link['text']} -> #{link['href']}\n"
+              end
+              output_text += "  ... (showing first 10)\n\n" if content_data['links'].length > 10
+            end
+            
+            if content_data['images'].any?
+              output_text += "Images (#{content_data['images'].length}):\n"
+              content_data['images'].first(5).each do |img|
+                output_text += "  #{img['alt']} (#{img['src']})\n"
+              end
+              output_text += "  ... (showing first 5)\n\n" if content_data['images'].length > 5
+            end
+            
+            if content_data['forms'].any?
+              output_text += "Forms (#{content_data['forms'].length}):\n"
+              content_data['forms'].each do |form|
+                output_text += "  Action: #{form['action'] || 'N/A'} (#{form['method']})\n"
+                output_text += "  Fields: #{form['fields'].length}\n"
+              end
+              output_text += "\n"
+            end
+            
+            if content_data['lists'].any?
+              output_text += "Lists (#{content_data['lists'].length}): #{content_data['lists'].map{|l| l['type']}.join(', ')}\n\n"
+            end
+            
+            if content_data['tables'].any?
+              output_text += "Tables (#{content_data['tables'].length}):\n"
+              content_data['tables'].each_with_index do |table, i|
+                output_text += "  Table #{i+1}: #{table['headers'].length} columns, #{table['rows'].length} rows\n"
+              end
+            end
+
+            {
+              content: [
+                {
+                  type: "text",
+                  text: output_text
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to extract structured content"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "get_page_metadata"
+          metadata = @cdp.get_page_metadata
+          
+          if metadata
+            output_text = "Page Metadata:\n\n"
+            output_text += "Title: #{metadata['title']}\n"
+            output_text += "URL: #{metadata['url']}\n"
+            output_text += "Description: #{metadata['description']}\n" unless metadata['description'].empty?
+            output_text += "Keywords: #{metadata['keywords']}\n" unless metadata['keywords'].empty?
+            output_text += "Author: #{metadata['author']}\n" unless metadata['author'].empty?
+            output_text += "Language: #{metadata['lang']}\n" unless metadata['lang'].empty?
+            output_text += "Viewport: #{metadata['viewport']}\n" unless metadata['viewport'].empty?
+            output_text += "Charset: #{metadata['charset']}\n" unless metadata['charset'].empty?
+            
+            if metadata['openGraph'] && metadata['openGraph'].any?
+              output_text += "\nOpen Graph Data:\n"
+              metadata['openGraph'].each do |key, value|
+                output_text += "  og:#{key}: #{value}\n"
+              end
+            end
+            
+            if metadata['twitter'] && metadata['twitter'].any?
+              output_text += "\nTwitter Card Data:\n"
+              metadata['twitter'].each do |key, value|
+                output_text += "  twitter:#{key}: #{value}\n"
+              end
+            end
+
+            {
+              content: [
+                {
+                  type: "text",
+                  text: output_text
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to extract page metadata"
+                }
+              ],
+              isError: true
             }
           end
 

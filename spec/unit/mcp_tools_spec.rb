@@ -11,7 +11,7 @@ RSpec.describe Inception::MCP::Tools do
       definitions = tools.tool_definitions
       
       expect(definitions).to be_an(Array)
-      expect(definitions.length).to eq(18)
+      expect(definitions.length).to eq(21)
       
       tool_names = definitions.map { |tool| tool[:name] }
       expected_tools = [
@@ -22,6 +22,9 @@ RSpec.describe Inception::MCP::Tools do
         'press_key',
         'get_page_content',
         'get_page_info',
+        'get_page_text',
+        'get_structured_content',
+        'get_page_metadata',
         'get_interactive_elements',
         'fill_form_field',
         'select_option',

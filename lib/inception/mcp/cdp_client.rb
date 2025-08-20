@@ -130,6 +130,197 @@ module Inception
         end
       end
 
+      def get_page_text_content
+        js_expression = <<~JS
+          (() => {
+            // Remove scripts, styles, and hidden elements
+            const elementsToRemove = document.querySelectorAll('script, style, noscript');
+            const hiddenElements = document.querySelectorAll('[style*="display: none"], [style*="visibility: hidden"], .hidden');
+            
+            let cleanText = document.body.textContent || document.body.innerText || '';
+            
+            // Clean up whitespace
+            cleanText = cleanText.replace(/\\s+/g, ' ').trim();
+            
+            return {
+              title: document.title || '',
+              url: window.location.href,
+              textContent: cleanText,
+              wordCount: cleanText.split(' ').length,
+              characterCount: cleanText.length
+            };
+          })()
+        JS
+
+        response = send_command_and_wait('Runtime.evaluate', {
+          expression: js_expression,
+          returnByValue: true
+        }, 10)
+        
+        if response && response['result'] && response['result']['result']
+          response['result']['result']['value']
+        else
+          nil
+        end
+      end
+
+      def get_structured_content
+        js_expression = <<~JS
+          (() => {
+            const result = {
+              title: document.title || '',
+              url: window.location.href,
+              headings: [],
+              links: [],
+              images: [],
+              forms: [],
+              lists: [],
+              tables: []
+            };
+
+            // Extract headings
+            document.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(heading => {
+              result.headings.push({
+                level: parseInt(heading.tagName.charAt(1)),
+                text: heading.textContent.trim(),
+                id: heading.id || null
+              });
+            });
+
+            // Extract links
+            document.querySelectorAll('a[href]').forEach(link => {
+              result.links.push({
+                text: link.textContent.trim(),
+                href: link.href,
+                title: link.title || null
+              });
+            });
+
+            // Extract images
+            document.querySelectorAll('img').forEach(img => {
+              result.images.push({
+                src: img.src,
+                alt: img.alt || '',
+                title: img.title || null,
+                width: img.width || null,
+                height: img.height || null
+              });
+            });
+
+            // Extract forms
+            document.querySelectorAll('form').forEach(form => {
+              const formData = {
+                action: form.action || null,
+                method: form.method || 'get',
+                fields: []
+              };
+              
+              form.querySelectorAll('input, select, textarea').forEach(field => {
+                formData.fields.push({
+                  type: field.type || field.tagName.toLowerCase(),
+                  name: field.name || null,
+                  id: field.id || null,
+                  placeholder: field.placeholder || null,
+                  required: field.required || false
+                });
+              });
+              
+              result.forms.push(formData);
+            });
+
+            // Extract lists
+            document.querySelectorAll('ul, ol').forEach(list => {
+              const items = Array.from(list.children).map(li => li.textContent.trim());
+              result.lists.push({
+                type: list.tagName.toLowerCase(),
+                items: items
+              });
+            });
+
+            // Extract tables
+            document.querySelectorAll('table').forEach(table => {
+              const headers = Array.from(table.querySelectorAll('th')).map(th => th.textContent.trim());
+              const rows = Array.from(table.querySelectorAll('tr')).map(tr => {
+                return Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim());
+              }).filter(row => row.length > 0);
+              
+              result.tables.push({
+                headers: headers,
+                rows: rows
+              });
+            });
+
+            return result;
+          })()
+        JS
+
+        response = send_command_and_wait('Runtime.evaluate', {
+          expression: js_expression,
+          returnByValue: true
+        }, 15)
+        
+        if response && response['result'] && response['result']['result']
+          response['result']['result']['value']
+        else
+          nil
+        end
+      end
+
+      def get_page_metadata
+        js_expression = <<~JS
+          (() => {
+            const meta = {
+              title: document.title || '',
+              url: window.location.href,
+              description: '',
+              keywords: '',
+              author: '',
+              viewport: '',
+              charset: '',
+              lang: document.documentElement.lang || '',
+              openGraph: {},
+              twitter: {}
+            };
+
+            // Extract meta tags
+            document.querySelectorAll('meta').forEach(metaTag => {
+              const name = metaTag.getAttribute('name');
+              const property = metaTag.getAttribute('property');
+              const content = metaTag.getAttribute('content') || '';
+
+              if (name === 'description') meta.description = content;
+              else if (name === 'keywords') meta.keywords = content;
+              else if (name === 'author') meta.author = content;
+              else if (name === 'viewport') meta.viewport = content;
+              else if (metaTag.getAttribute('charset')) meta.charset = metaTag.getAttribute('charset');
+              
+              // Open Graph tags
+              if (property && property.startsWith('og:')) {
+                meta.openGraph[property.replace('og:', '')] = content;
+              }
+              
+              // Twitter Card tags
+              if (name && name.startsWith('twitter:')) {
+                meta.twitter[name.replace('twitter:', '')] = content;
+              }
+            });
+
+            return meta;
+          })()
+        JS
+
+        response = send_command_and_wait('Runtime.evaluate', {
+          expression: js_expression,
+          returnByValue: true
+        }, 10)
+        
+        if response && response['result'] && response['result']['result']
+          response['result']['result']['value']
+        else
+          nil
+        end
+      end
+
       def get_interactive_elements
         # JavaScript to find all interactive elements with their positions and metadata
         js_expression = <<~JS
