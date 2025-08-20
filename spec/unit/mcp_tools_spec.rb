@@ -11,7 +11,7 @@ RSpec.describe Inception::MCP::Tools do
       definitions = tools.tool_definitions
       
       expect(definitions).to be_an(Array)
-      expect(definitions.length).to eq(23)
+      expect(definitions.length).to eq(26)
       
       tool_names = definitions.map { |tool| tool[:name] }
       expected_tools = [
@@ -37,7 +37,10 @@ RSpec.describe Inception::MCP::Tools do
         'switch_to_tab',
         'navigate_back',
         'navigate_forward',
-        'reload_page'
+        'reload_page',
+        'inject_script',
+        'execute_script',
+        'create_script_bridge'
       ]
       
       expect(tool_names).to match_array(expected_tools)

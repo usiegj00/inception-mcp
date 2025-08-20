@@ -930,6 +930,228 @@ module Inception
         end
       end
 
+      def inject_script(script_content, world_name = nil)
+        return { error: 'Not connected' } unless @connected
+        
+        params = {
+          source: script_content,
+          runImmediately: true
+        }
+        
+        if world_name
+          params[:worldName] = world_name
+        end
+        
+        result = send_command_and_wait('Page.addScriptToEvaluateOnNewDocument', params, 10)
+        
+        if result && result['result']
+          script_id = result['result']['identifier']
+          # Also evaluate the script on the current page
+          eval_result = send_command_and_wait('Runtime.evaluate', {
+            expression: script_content,
+            returnByValue: false,
+            generatePreview: false
+          }, 10)
+          
+          {
+            success: true,
+            script_id: script_id,
+            injected: true,
+            evaluated: eval_result && !eval_result['error']
+          }
+        else
+          { error: 'Failed to inject script', details: result&.dig('error') }
+        end
+      end
+
+      def remove_injected_script(script_id)
+        return { error: 'Not connected' } unless @connected
+        return { error: 'No script ID provided' } unless script_id
+        
+        result = send_command_and_wait('Page.removeScriptToEvaluateOnNewDocument', {
+          identifier: script_id
+        }, 5)
+        
+        if result && !result['error']
+          { success: true, script_id: script_id }
+        else
+          { error: 'Failed to remove script', script_id: script_id }
+        end
+      end
+
+      def execute_script(script_content, return_value = true)
+        return { error: 'Not connected' } unless @connected
+        
+        result = send_command_and_wait('Runtime.evaluate', {
+          expression: script_content,
+          returnByValue: return_value,
+          generatePreview: false,
+          userGesture: true
+        }, 15)
+        
+        if result && result['result']
+          if result['result']['exceptionDetails']
+            {
+              error: 'Script execution error',
+              exception: result['result']['exceptionDetails']['text'],
+              line: result['result']['exceptionDetails']['lineNumber'],
+              column: result['result']['exceptionDetails']['columnNumber']
+            }
+          else
+            {
+              success: true,
+              result: result['result']['result'],
+              value: result['result']['result']['value'] if return_value
+            }
+          end
+        else
+          { error: 'Failed to execute script', details: result&.dig('error') }
+        end
+      end
+
+      def create_script_bridge(bridge_name = 'InceptionBridge')
+        bridge_script = <<~JS
+          (function() {
+            if (window.#{bridge_name}) return window.#{bridge_name};
+            
+            const bridge = {
+              callbacks: {},
+              nextId: 1,
+              
+              // Register a callback for communication from the injected script
+              on: function(event, callback) {
+                if (!this.callbacks[event]) this.callbacks[event] = [];
+                this.callbacks[event].push(callback);
+              },
+              
+              // Emit an event to all registered callbacks
+              emit: function(event, data) {
+                if (this.callbacks[event]) {
+                  this.callbacks[event].forEach(callback => {
+                    try {
+                      callback(data);
+                    } catch (e) {
+                      console.error('Bridge callback error:', e);
+                    }
+                  });
+                }
+              },
+              
+              // Execute a function and return a promise
+              execute: function(func, ...args) {
+                return new Promise((resolve, reject) => {
+                  try {
+                    const result = func.apply(this, args);
+                    resolve(result);
+                  } catch (error) {
+                    reject(error);
+                  }
+                });
+              },
+              
+              // Get element information
+              getElementInfo: function(selector) {
+                const element = document.querySelector(selector);
+                if (!element) return null;
+                
+                const rect = element.getBoundingClientRect();
+                return {
+                  tagName: element.tagName.toLowerCase(),
+                  id: element.id,
+                  className: element.className,
+                  textContent: element.textContent.trim(),
+                  value: element.value || '',
+                  href: element.href || '',
+                  src: element.src || '',
+                  x: Math.round(rect.left + rect.width / 2),
+                  y: Math.round(rect.top + rect.height / 2),
+                  width: Math.round(rect.width),
+                  height: Math.round(rect.height),
+                  visible: rect.width > 0 && rect.height > 0
+                };
+              },
+              
+              // Wait for an element to appear
+              waitForElement: function(selector, timeout = 5000) {
+                return new Promise((resolve, reject) => {
+                  const element = document.querySelector(selector);
+                  if (element) {
+                    resolve(this.getElementInfo(selector));
+                    return;
+                  }
+                  
+                  const observer = new MutationObserver((mutations) => {
+                    const element = document.querySelector(selector);
+                    if (element) {
+                      observer.disconnect();
+                      clearTimeout(timeoutId);
+                      resolve(this.getElementInfo(selector));
+                    }
+                  });
+                  
+                  const timeoutId = setTimeout(() => {
+                    observer.disconnect();
+                    reject(new Error(`Element ${selector} not found within ${timeout}ms`));
+                  }, timeout);
+                  
+                  observer.observe(document.body, {
+                    childList: true,
+                    subtree: true
+                  });
+                });
+              },
+              
+              // Monitor page changes
+              onPageChange: function(callback) {
+                const observer = new MutationObserver((mutations) => {
+                  callback({
+                    type: 'mutation',
+                    mutations: mutations.length,
+                    url: window.location.href,
+                    title: document.title
+                  });
+                });
+                
+                observer.observe(document.body, {
+                  childList: true,
+                  subtree: true,
+                  attributes: true
+                });
+                
+                // Also monitor URL changes
+                let lastUrl = location.href;
+                const urlObserver = setInterval(() => {
+                  if (location.href !== lastUrl) {
+                    lastUrl = location.href;
+                    callback({
+                      type: 'navigation',
+                      url: location.href,
+                      title: document.title
+                    });
+                  }
+                }, 100);
+                
+                return () => {
+                  observer.disconnect();
+                  clearInterval(urlObserver);
+                };
+              }
+            };
+            
+            window.#{bridge_name} = bridge;
+            return bridge;
+          })();
+        JS
+
+        result = execute_script(bridge_script, true)
+        
+        if result['success']
+          { success: true, bridge_name: bridge_name, injected: true }
+        else
+          result
+        end
+      end
+
       private
 
       def discover_tabs

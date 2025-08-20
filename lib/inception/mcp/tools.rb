@@ -356,6 +356,63 @@ module Inception
               },
               additionalProperties: false
             }
+          },
+          {
+            name: "inject_script",
+            title: "Inject Script",
+            description: "Inject JavaScript code into the page that will run on current and future page loads. Useful for adding custom functionality or monitoring.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                script: {
+                  type: "string",
+                  description: "JavaScript code to inject into the page"
+                },
+                world_name: {
+                  type: "string",
+                  description: "Optional isolated world name for script execution (for security)"
+                }
+              },
+              required: ["script"],
+              additionalProperties: false
+            }
+          },
+          {
+            name: "execute_script", 
+            title: "Execute Script",
+            description: "Execute JavaScript code in the current page context and optionally return the result. Useful for dynamic page manipulation and data extraction.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                script: {
+                  type: "string",
+                  description: "JavaScript code to execute"
+                },
+                return_value: {
+                  type: "boolean",
+                  description: "Whether to return the script's result value",
+                  default: true
+                }
+              },
+              required: ["script"],
+              additionalProperties: false
+            }
+          },
+          {
+            name: "create_script_bridge",
+            title: "Create Script Bridge",
+            description: "Create a JavaScript bridge object with utility functions for advanced page interaction, element waiting, and change monitoring.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                bridge_name: {
+                  type: "string",
+                  description: "Name for the bridge object (default: InceptionBridge)",
+                  default: "InceptionBridge"
+                }
+              },
+              additionalProperties: false
+            }
           }
         ]
       end
@@ -1032,6 +1089,98 @@ module Inception
                 {
                   type: "text",
                   text: "Failed to reload page: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "inject_script"
+          script = arguments["script"]
+          world_name = arguments["world_name"]
+          result = @cdp.inject_script(script, world_name)
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully injected script (ID: #{result['script_id']}). Script will run on current and future page loads."
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to inject script: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "execute_script"
+          script = arguments["script"]
+          return_value = arguments.fetch("return_value", true)
+          result = @cdp.execute_script(script, return_value)
+          
+          if result["success"]
+            output_text = "Script executed successfully"
+            if return_value && result["value"]
+              output_text += "\nReturned value: #{result['value'].inspect}"
+            elsif return_value
+              output_text += "\nNo return value"
+            end
+            
+            {
+              content: [
+                {
+                  type: "text",
+                  text: output_text
+                }
+              ]
+            }
+          else
+            error_text = "Script execution failed: #{result['error']}"
+            if result["exception"]
+              error_text += "\nException: #{result['exception']}"
+              if result["line"] && result["column"]
+                error_text += " (line #{result['line']}, column #{result['column']})"
+              end
+            end
+            
+            {
+              content: [
+                {
+                  type: "text",
+                  text: error_text
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "create_script_bridge"
+          bridge_name = arguments.fetch("bridge_name", "InceptionBridge")
+          result = @cdp.create_script_bridge(bridge_name)
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully created script bridge '#{result['bridge_name']}'. Available methods: on(), emit(), execute(), getElementInfo(), waitForElement(), onPageChange()"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to create script bridge: #{result['error']}"
                 }
               ],
               isError: true
