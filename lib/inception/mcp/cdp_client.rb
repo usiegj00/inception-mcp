@@ -18,6 +18,8 @@ module Inception
         @ws = nil
         @callbacks = {}
         @request_id = 0
+        @event_waiters = {}
+        @response_cache = {}
       end
 
       def connect
@@ -48,22 +50,143 @@ module Inception
         @request_id
       end
 
+      def send_command_and_wait(method, params = {}, timeout = 10)
+        return nil unless @connected
+
+        request_id = send_command(method, params)
+        return nil unless request_id
+
+        # Wait for response
+        start_time = Time.now
+        while Time.now - start_time < timeout
+          if @response_cache[request_id]
+            response = @response_cache.delete(request_id)
+            return response
+          end
+          sleep(0.01)
+        end
+
+        # Cleanup on timeout
+        @callbacks.delete(request_id)
+        nil
+      end
+
+      def wait_for_event(event_name, timeout = 10)
+        return nil unless @connected
+
+        # Store the waiter
+        waiter_id = "#{event_name}_#{Time.now.to_f}"
+        @event_waiters[waiter_id] = { event: event_name, result: nil }
+
+        # Wait for event
+        start_time = Time.now
+        while Time.now - start_time < timeout
+          if @event_waiters[waiter_id][:result]
+            result = @event_waiters[waiter_id][:result]
+            @event_waiters.delete(waiter_id)
+            return result
+          end
+          sleep(0.01)
+        end
+
+        # Cleanup on timeout
+        @event_waiters.delete(waiter_id)
+        nil
+      end
+
       def navigate(url)
-        send_command('Page.navigate', { url: url })
+        # Send navigation command
+        result = send_command_and_wait('Page.navigate', { url: url }, 5)
+        return false unless result && !result['error']
+        
+        # Wait for page to load
+        load_event = wait_for_event('Page.loadEventFired', 15)
+        !!load_event
       end
 
       def take_screenshot(format: 'png', quality: 80)
-        send_command('Page.captureScreenshot', {
+        response = send_command_and_wait('Page.captureScreenshot', {
           format: format,
           quality: quality,
-          captureBeyondViewport: true
-        })
+          captureBeyondViewport: false
+        }, 10)
+        
+        if response && response['result'] && response['result']['data']
+          response['result']['data']
+        else
+          nil
+        end
       end
 
       def get_page_content
-        send_command('Runtime.evaluate', {
+        response = send_command_and_wait('Runtime.evaluate', {
           expression: 'document.documentElement.outerHTML'
-        })
+        }, 10)
+        
+        if response && response['result'] && response['result']['result']
+          response['result']['result']['value']
+        else
+          nil
+        end
+      end
+
+      def get_interactive_elements
+        # JavaScript to find all interactive elements with their positions and metadata
+        js_expression = <<~JS
+          (() => {
+            const interactiveSelectors = [
+              'a[href]', 'button', 'input', 'select', 'textarea',
+              '[onclick]', '[role="button"]', '[role="link"]', 
+              '[tabindex]', 'details', 'summary'
+            ];
+            
+            const elements = [];
+            interactiveSelectors.forEach(selector => {
+              document.querySelectorAll(selector).forEach(el => {
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                
+                // Only include visible elements within viewport
+                if (rect.width > 0 && rect.height > 0 && 
+                    style.visibility !== 'hidden' && 
+                    style.display !== 'none' &&
+                    rect.top < window.innerHeight && 
+                    rect.bottom > 0 &&
+                    rect.left < window.innerWidth && 
+                    rect.right > 0) {
+                  
+                  elements.push({
+                    tagName: el.tagName.toLowerCase(),
+                    selector: el.id ? `#${el.id}` : 
+                             el.className ? `.${el.className.split(' ').join('.')}` :
+                             el.tagName.toLowerCase(),
+                    text: (el.textContent || el.value || el.placeholder || '').trim().substring(0, 100),
+                    type: el.type || '',
+                    href: el.href || '',
+                    x: Math.round(rect.left + rect.width / 2),
+                    y: Math.round(rect.top + rect.height / 2),
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height),
+                    isClickable: true
+                  });
+                }
+              });
+            });
+            
+            return elements;
+          })()
+        JS
+
+        response = send_command_and_wait('Runtime.evaluate', {
+          expression: js_expression,
+          returnByValue: true
+        }, 10)
+        
+        if response && response['result'] && response['result']['result']
+          response['result']['result']['value'] || []
+        else
+          []
+        end
       end
 
       def click_element(x, y)
@@ -84,6 +207,50 @@ module Inception
           button: 'left',
           clickCount: 1
         })
+      end
+
+      def click_element_by_selector(selector)
+        # JavaScript to find element and get its center coordinates
+        js_expression = <<~JS
+          (() => {
+            const element = document.querySelector('#{selector.gsub("'", "\\'")}');
+            if (!element) {
+              return { error: 'Element not found', selector: '#{selector.gsub("'", "\\'")}' };
+            }
+            
+            const rect = element.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) {
+              return { error: 'Element not visible', selector: '#{selector.gsub("'", "\\'")}' };
+            }
+            
+            return {
+              success: true,
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2),
+              tagName: element.tagName.toLowerCase(),
+              text: (element.textContent || element.value || '').trim().substring(0, 50)
+            };
+          })()
+        JS
+
+        response = send_command_and_wait('Runtime.evaluate', {
+          expression: js_expression,
+          returnByValue: true
+        }, 10)
+        
+        if response && response['result'] && response['result']['result']
+          result = response['result']['result']['value']
+          
+          if result['success']
+            # Click at the calculated coordinates
+            click_element(result['x'], result['y'])
+            result
+          else
+            result
+          end
+        else
+          { error: 'Failed to evaluate selector', selector: selector }
+        end
       end
 
       def type_text(text)
@@ -152,7 +319,7 @@ module Inception
 
         @tabs = JSON.parse(response).select { |tab| tab['type'] == 'page' }
       rescue JSON::ParserError => e
-        puts "Error parsing tabs response: #{e.message}"
+        STDERR.puts "Error parsing tabs response: #{e.message}"
         @tabs = []
       end
 
@@ -163,9 +330,9 @@ module Inception
         cdp_client = self
 
         @ws.on :open do
-          puts "WebSocket opened"
+          STDERR.puts "WebSocket opened"
           cdp_client.instance_variable_set(:@connected, true)
-          puts "Connected to CDP WebSocket"
+          STDERR.puts "Connected to CDP WebSocket"
           
           # Enable necessary domains
           cdp_client.send_command('Page.enable')
@@ -178,17 +345,17 @@ module Inception
             data = JSON.parse(msg.data)
             cdp_client.send(:handle_message, data)
           rescue JSON::ParserError => e
-            puts "Error parsing WebSocket message: #{e.message}"
+            STDERR.puts "Error parsing WebSocket message: #{e.message}"
           end
         end
 
         @ws.on :close do
           cdp_client.instance_variable_set(:@connected, false)
-          puts "CDP WebSocket connection closed"
+          STDERR.puts "CDP WebSocket connection closed"
         end
 
         @ws.on :error do |e|
-          puts "CDP WebSocket error: #{e.message}"
+          STDERR.puts "CDP WebSocket error: #{e.message}"
           cdp_client.instance_variable_set(:@connected, false)
         end
 
@@ -200,7 +367,7 @@ module Inception
           sleep(0.1)
         end
         
-        puts "Connection status after wait: #{@connected}"
+        STDERR.puts "Connection status after wait: #{@connected}"
         @connected
       end
 
@@ -209,6 +376,8 @@ module Inception
         if data['id']
           # Response to our command
           request_id = data['id']
+          @response_cache[request_id] = data
+          
           if @callbacks[request_id]
             @callbacks[request_id].call(data)
             @callbacks.delete(request_id)
@@ -224,11 +393,18 @@ module Inception
         method = data['method']
         params = data['params']
 
+        # Notify any waiters for this event
+        @event_waiters.each do |waiter_id, waiter|
+          if waiter[:event] == method
+            waiter[:result] = data
+          end
+        end
+
         case method
         when 'Page.loadEventFired'
-          puts "Page loaded"
+          STDERR.puts "Page loaded"
         when 'Runtime.consoleAPICalled'
-          puts "Console: #{params['args'].map { |arg| arg['value'] }.join(' ')}"
+          STDERR.puts "Console: #{params['args'].map { |arg| arg['value'] }.join(' ')}"
         end
       end
 
@@ -237,7 +413,7 @@ module Inception
         response = Net::HTTP.get_response(uri)
         response.code == '200' ? response.body : nil
       rescue => e
-        puts "HTTP request failed: #{e.message}"
+        STDERR.puts "HTTP request failed: #{e.message}"
         nil
       end
     end
