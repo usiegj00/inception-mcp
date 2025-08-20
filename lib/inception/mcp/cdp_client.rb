@@ -747,6 +747,8 @@ module Inception
         { success: true, text: text }
       end
 
+      public
+
       def scroll_page(direction, amount = nil)
         return { error: 'Not connected' } unless @connected
         
