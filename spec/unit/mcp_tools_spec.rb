@@ -11,7 +11,7 @@ RSpec.describe Inception::MCP::Tools do
       definitions = tools.tool_definitions
       
       expect(definitions).to be_an(Array)
-      expect(definitions.length).to eq(11)
+      expect(definitions.length).to eq(18)
       
       tool_names = definitions.map { |tool| tool[:name] }
       expected_tools = [
@@ -25,7 +25,14 @@ RSpec.describe Inception::MCP::Tools do
         'get_interactive_elements',
         'fill_form_field',
         'select_option',
-        'check_checkbox'
+        'check_checkbox',
+        'get_windows_and_tabs',
+        'create_new_tab',
+        'close_tab',
+        'switch_to_tab',
+        'navigate_back',
+        'navigate_forward',
+        'reload_page'
       ]
       
       expect(tool_names).to match_array(expected_tools)

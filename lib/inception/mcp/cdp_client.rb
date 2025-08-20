@@ -486,6 +486,145 @@ module Inception
         send_command('Target.getTargetInfo')
       end
 
+      def get_all_windows_and_tabs
+        # Get all tabs/windows from the browser
+        response = http_get('/json/list')
+        return [] unless response
+
+        begin
+          tabs_data = JSON.parse(response)
+          
+          # Group tabs by window and format the data
+          result = []
+          current_window = nil
+          
+          tabs_data.each do |tab_info|
+            next unless tab_info['type'] == 'page'
+            
+            # Create window grouping (simplified - Chrome CDP doesn't directly provide window info)
+            window_id = tab_info['id'].split('-').first || 'window-1'
+            
+            # Find or create window entry
+            window = result.find { |w| w[:window_id] == window_id }
+            unless window
+              window = {
+                window_id: window_id,
+                tabs: []
+              }
+              result << window
+            end
+            
+            # Add tab info
+            window[:tabs] << {
+              tab_id: tab_info['id'],
+              title: tab_info['title'] || '',
+              url: tab_info['url'] || '',
+              favicon: tab_info['faviconUrl'] || '',
+              active: tab_info['id'] == @tabs&.first&.dig('id')
+            }
+          end
+          
+          result
+        rescue JSON::ParserError => e
+          STDERR.puts "Error parsing windows/tabs response: #{e.message}"
+          []
+        end
+      end
+
+      def create_new_tab(url = 'about:blank')
+        # Create a new tab
+        response = http_get("/json/new?#{url}")
+        return nil unless response
+
+        begin
+          tab_info = JSON.parse(response)
+          {
+            success: true,
+            tab_id: tab_info['id'],
+            title: tab_info['title'] || '',
+            url: tab_info['url'] || url
+          }
+        rescue JSON::ParserError => e
+          STDERR.puts "Error creating new tab: #{e.message}"
+          { error: 'Failed to create new tab', details: e.message }
+        end
+      end
+
+      def close_tab(tab_id)
+        # Close a specific tab
+        response = http_get("/json/close/#{tab_id}")
+        
+        if response == 'Target is closing'
+          { success: true, tab_id: tab_id }
+        else
+          { error: 'Failed to close tab', tab_id: tab_id }
+        end
+      end
+
+      def switch_to_tab(tab_id)
+        # Switch to a different tab by connecting to it
+        tabs_list = get_tabs_info
+        target_tab = tabs_list.find { |tab| tab[:id] == tab_id }
+        
+        return { error: 'Tab not found', tab_id: tab_id } unless target_tab
+        
+        # Close current connection
+        disconnect if @connected
+        
+        # Get the WebSocket URL for the target tab
+        response = http_get('/json/list')
+        return { error: 'Failed to get tab list' } unless response
+        
+        begin
+          tabs_data = JSON.parse(response)
+          target_tab_data = tabs_data.find { |tab| tab['id'] == tab_id }
+          
+          return { error: 'Target tab not found in list' } unless target_tab_data
+          
+          # Connect to the new tab
+          if connect_to_tab(target_tab_data['webSocketDebuggerUrl'])
+            { success: true, tab_id: tab_id, title: target_tab_data['title'], url: target_tab_data['url'] }
+          else
+            { error: 'Failed to connect to tab', tab_id: tab_id }
+          end
+        rescue JSON::ParserError => e
+          { error: 'Failed to parse tab data', details: e.message }
+        end
+      end
+
+      def navigate_back
+        return { error: 'Not connected' } unless @connected
+        
+        result = send_command_and_wait('Page.navigateToHistoryEntry', { entryId: -1 }, 5)
+        if result && !result['error']
+          { success: true }
+        else
+          { error: 'Navigation back failed' }
+        end
+      end
+
+      def navigate_forward
+        return { error: 'Not connected' } unless @connected
+        
+        result = send_command_and_wait('Page.navigateToHistoryEntry', { entryId: 1 }, 5)
+        if result && !result['error']
+          { success: true }
+        else
+          { error: 'Navigation forward failed' }
+        end
+      end
+
+      def reload_page(ignore_cache = false)
+        return { error: 'Not connected' } unless @connected
+        
+        result = send_command_and_wait('Page.reload', { ignoreCache: ignore_cache }, 10)
+        if result && !result['error']
+          { success: true }
+        else
+          { error: 'Page reload failed' }
+        end
+      end
+
       private
 
       def discover_tabs

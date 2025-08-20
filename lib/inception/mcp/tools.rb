@@ -199,6 +199,100 @@ module Inception
               required: ["selector"],
               additionalProperties: false
             }
+          },
+          {
+            name: "get_windows_and_tabs",
+            title: "Get Browser Windows and Tabs",
+            description: "List all browser windows and their tabs with metadata including titles, URLs, and active status.",
+            inputSchema: {
+              type: "object",
+              properties: {},
+              additionalProperties: false
+            }
+          },
+          {
+            name: "create_new_tab",
+            title: "Create New Tab",
+            description: "Create a new browser tab, optionally with a specific URL.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                url: {
+                  type: "string",
+                  description: "URL to open in the new tab (optional, defaults to blank page)",
+                  default: "about:blank"
+                }
+              },
+              additionalProperties: false
+            }
+          },
+          {
+            name: "close_tab",
+            title: "Close Tab",
+            description: "Close a specific browser tab by its ID.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                tab_id: {
+                  type: "string",
+                  description: "The ID of the tab to close"
+                }
+              },
+              required: ["tab_id"],
+              additionalProperties: false
+            }
+          },
+          {
+            name: "switch_to_tab",
+            title: "Switch to Tab",
+            description: "Switch the active browser context to a different tab.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                tab_id: {
+                  type: "string",
+                  description: "The ID of the tab to switch to"
+                }
+              },
+              required: ["tab_id"],
+              additionalProperties: false
+            }
+          },
+          {
+            name: "navigate_back",
+            title: "Navigate Back",
+            description: "Navigate back in the browser history.",
+            inputSchema: {
+              type: "object",
+              properties: {},
+              additionalProperties: false
+            }
+          },
+          {
+            name: "navigate_forward",
+            title: "Navigate Forward",
+            description: "Navigate forward in the browser history.",
+            inputSchema: {
+              type: "object",
+              properties: {},
+              additionalProperties: false
+            }
+          },
+          {
+            name: "reload_page",
+            title: "Reload Page",
+            description: "Reload the current page, optionally bypassing cache.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                ignore_cache: {
+                  type: "boolean",
+                  description: "Whether to bypass the cache when reloading",
+                  default: false
+                }
+              },
+              additionalProperties: false
+            }
           }
         ]
       end
@@ -483,6 +577,192 @@ module Inception
                 {
                   type: "text",
                   text: "Failed to modify #{selector}: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "get_windows_and_tabs"
+          windows_data = @cdp.get_all_windows_and_tabs
+          
+          if windows_data && windows_data.any?
+            output_text = "Browser Windows and Tabs:\n"
+            
+            windows_data.each_with_index do |window, win_idx|
+              output_text += "\nWindow #{win_idx + 1} (ID: #{window[:window_id]}):\n"
+              
+              window[:tabs].each_with_index do |tab, tab_idx|
+                status = tab[:active] ? " [ACTIVE]" : ""
+                output_text += "  #{tab_idx + 1}. #{tab[:title]}#{status}\n"
+                output_text += "     URL: #{tab[:url]}\n"
+                output_text += "     Tab ID: #{tab[:tab_id]}\n"
+              end
+            end
+
+            {
+              content: [
+                {
+                  type: "text",
+                  text: output_text
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "No browser windows or tabs found"
+                }
+              ]
+            }
+          end
+
+        when "create_new_tab"
+          url = arguments.fetch("url", "about:blank")
+          result = @cdp.create_new_tab(url)
+          
+          if result && result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully created new tab (ID: #{result['tab_id']}) with URL: #{result['url']}"
+                }
+              ]
+            }
+          else
+            error_msg = result && result["error"] ? result["error"] : "Unknown error"
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to create new tab: #{error_msg}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "close_tab"
+          tab_id = arguments["tab_id"]
+          result = @cdp.close_tab(tab_id)
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully closed tab (ID: #{result['tab_id']})"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to close tab (ID: #{tab_id}): #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "switch_to_tab"
+          tab_id = arguments["tab_id"]
+          result = @cdp.switch_to_tab(tab_id)
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully switched to tab: #{result['title']} (#{result['url']})"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to switch to tab (ID: #{tab_id}): #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "navigate_back"
+          result = @cdp.navigate_back
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully navigated back in history"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to navigate back: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "navigate_forward"
+          result = @cdp.navigate_forward
+          
+          if result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully navigated forward in history"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to navigate forward: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "reload_page"
+          ignore_cache = arguments.fetch("ignore_cache", false)
+          result = @cdp.reload_page(ignore_cache)
+          
+          if result["success"]
+            cache_text = ignore_cache ? " (bypassing cache)" : ""
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully reloaded page#{cache_text}"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to reload page: #{result['error']}"
                 }
               ],
               isError: true
