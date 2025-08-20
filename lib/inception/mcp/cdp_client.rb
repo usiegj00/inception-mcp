@@ -1009,6 +1009,42 @@ module Inception
         end
       end
 
+      def capture_console_logs(enable = true)
+        return { error: 'Not connected' } unless @connected
+        
+        if enable
+          # Enable Runtime domain for console events
+          result = send_command_and_wait('Runtime.enable', {}, 5)
+          if result && !result['error']
+            @console_logs = []
+            { success: true, enabled: true }
+          else
+            { error: 'Failed to enable console logging' }
+          end
+        else
+          @console_logs = nil
+          { success: true, enabled: false }
+        end
+      end
+
+      def get_console_logs(clear_after = false)
+        logs = @console_logs || []
+        @console_logs = [] if clear_after && @console_logs
+        
+        {
+          success: true,
+          logs: logs.map do |log|
+            {
+              level: log[:level],
+              text: log[:text],
+              timestamp: log[:timestamp],
+              source: log[:source]
+            }
+          end,
+          count: logs.length
+        }
+      end
+
       def create_script_bridge(bridge_name = 'InceptionBridge')
         bridge_script = <<~JS
           (function() {
@@ -1245,7 +1281,31 @@ module Inception
         when 'Page.loadEventFired'
           STDERR.puts "Page loaded"
         when 'Runtime.consoleAPICalled'
-          STDERR.puts "Console: #{params['args'].map { |arg| arg['value'] }.join(' ')}"
+          console_text = params['args'].map { |arg| arg['value'] }.join(' ')
+          STDERR.puts "Console: #{console_text}"
+          
+          # Store console log if capture is enabled
+          if @console_logs
+            @console_logs << {
+              level: params['type'] || 'log',
+              text: console_text,
+              timestamp: params['timestamp'] || Time.now.to_f * 1000,
+              source: 'console'
+            }
+          end
+        when 'Runtime.exceptionThrown'
+          exception_text = params.dig('exceptionDetails', 'text') || 'JavaScript error'
+          STDERR.puts "JavaScript Exception: #{exception_text}"
+          
+          # Store exception if capture is enabled
+          if @console_logs
+            @console_logs << {
+              level: 'error',
+              text: "Exception: #{exception_text}",
+              timestamp: params['timestamp'] || Time.now.to_f * 1000,
+              source: 'exception'
+            }
+          end
         end
       end
 

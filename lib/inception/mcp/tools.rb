@@ -413,6 +413,38 @@ module Inception
               },
               additionalProperties: false
             }
+          },
+          {
+            name: "capture_console",
+            title: "Capture Console Output",
+            description: "Enable or disable capturing of browser console logs and JavaScript exceptions for debugging and monitoring.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                enable: {
+                  type: "boolean",
+                  description: "Whether to enable or disable console capture",
+                  default: true
+                }
+              },
+              additionalProperties: false
+            }
+          },
+          {
+            name: "get_console_logs",
+            title: "Get Console Logs",
+            description: "Retrieve captured console logs and exceptions. Useful for debugging JavaScript issues and monitoring page behavior.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                clear_after: {
+                  type: "boolean", 
+                  description: "Whether to clear the log buffer after retrieval",
+                  default: false
+                }
+              },
+              additionalProperties: false
+            }
           }
         ]
       end
@@ -1181,6 +1213,74 @@ module Inception
                 {
                   type: "text",
                   text: "Failed to create script bridge: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "capture_console"
+          enable = arguments.fetch("enable", true)
+          result = @cdp.capture_console_logs(enable)
+          
+          if result["success"]
+            status = result["enabled"] ? "enabled" : "disabled"
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Console logging #{status} successfully"
+                }
+              ]
+            }
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to configure console logging: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "get_console_logs"
+          clear_after = arguments.fetch("clear_after", false)
+          result = @cdp.get_console_logs(clear_after)
+          
+          if result["success"]
+            if result["logs"].any?
+              log_text = "Console Logs (#{result['count']} entries):\n\n"
+              result["logs"].each_with_index do |log, i|
+                timestamp = Time.at(log[:timestamp] / 1000.0).strftime("%H:%M:%S.%L")
+                log_text += "#{i+1}. [#{timestamp}] #{log[:level].upcase}: #{log[:text]}\n"
+              end
+              
+              {
+                content: [
+                  {
+                    type: "text",
+                    text: log_text
+                  }
+                ]
+              }
+            else
+              {
+                content: [
+                  {
+                    type: "text",
+                    text: "No console logs captured. Enable console capture first with capture_console tool."
+                  }
+                ]
+              }
+            end
+          else
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to retrieve console logs"
                 }
               ],
               isError: true
