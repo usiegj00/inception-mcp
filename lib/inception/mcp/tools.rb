@@ -145,10 +145,23 @@ module Inception
           {
             name: "get_page_content",
             title: "Extract Page Content",
-            description: "Extract the complete HTML source code of the currently loaded page. Useful for content analysis, scraping, debugging, or understanding page structure.",
+            description: "Extract HTML source code of the currently loaded page. Supports limiting content size to prevent token overflow.",
             inputSchema: {
               type: "object",
-              properties: {},
+              properties: {
+                max_length: {
+                  type: "number",
+                  description: "Maximum number of characters to return (default: 20000 to stay under token limits)",
+                  minimum: 100,
+                  maximum: 100000,
+                  default: 20000
+                },
+                include_head: {
+                  type: "boolean", 
+                  description: "Whether to include the <head> section (default: false)",
+                  default: false
+                }
+              },
               additionalProperties: false
             }
           },
@@ -823,14 +836,29 @@ module Inception
           end
 
         when "get_page_content"
+          max_length = arguments.fetch("max_length", 20000)
+          include_head = arguments.fetch("include_head", false)
+          
           html_content = @cdp.get_page_content
           
           if html_content
+            # Filter out head section if requested
+            unless include_head
+              html_content = html_content.gsub(/<head.*?<\/head>/mi, '<head>[HEAD SECTION REMOVED]</head>')
+            end
+            
+            # Truncate if too long
+            if html_content.length > max_length
+              truncated_content = html_content[0, max_length]
+              truncated_content += "\n\n[CONTENT TRUNCATED - #{html_content.length - max_length} more characters available]"
+              html_content = truncated_content
+            end
+            
             {
               content: [
                 {
                   type: "text",
-                  text: "HTML Content:\n#{html_content}"
+                  text: "HTML Content (#{html_content.length} characters):\n#{html_content}"
                 }
               ]
             }

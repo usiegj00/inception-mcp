@@ -1328,6 +1328,8 @@ module Inception
         end
       end
 
+      public
+
       def execute_script(script_content, return_value = true)
         return { error: 'Not connected' } unless @connected
         
