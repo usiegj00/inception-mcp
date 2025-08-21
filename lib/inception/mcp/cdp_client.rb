@@ -595,7 +595,6 @@ module Inception
         end
       end
 
-      private
 
       def focus_element(selector)
         js_expression = <<~JS
@@ -771,7 +770,6 @@ module Inception
         { success: true, text: text }
       end
 
-      public
 
       def scroll_page(direction, amount = nil)
         return { error: 'Not connected' } unless @connected
@@ -1088,7 +1086,6 @@ module Inception
         end
       end
 
-      private
 
       def get_window_id
         # Get the window ID for the current browser window
@@ -1096,7 +1093,6 @@ module Inception
         1 # Chrome typically uses window ID 1 for the main window
       end
 
-      private
 
       def get_key_code(key)
         key_codes = {
@@ -1116,6 +1112,7 @@ module Inception
         
         key_codes[key] || key.ord
       end
+
 
       def get_tabs_info
         response = http_get('/json/list')
@@ -1328,7 +1325,6 @@ module Inception
         end
       end
 
-      public
 
       def execute_script(script_content, return_value = true)
         return { error: 'Not connected' } unless @connected
