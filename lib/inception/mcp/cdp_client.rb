@@ -1536,6 +1536,156 @@ module Inception
         end
       end
 
+      def debug_element_by_selector(selector)
+        js_expression = <<~JS
+          (() => {
+            const element = document.querySelector('#{selector.gsub("'", "\\'")}');
+            if (!element) {
+              return { error: 'Element not found', selector: '#{selector.gsub("'", "\\'")}' };
+            }
+            
+            const rect = element.getBoundingClientRect();
+            const computedStyle = window.getComputedStyle(element);
+            
+            // Get all attributes
+            const attributes = {};
+            for (let attr of element.attributes) {
+              attributes[attr.name] = attr.value;
+            }
+            
+            return {
+              success: true,
+              tagName: element.tagName.toLowerCase(),
+              text: (element.textContent || element.value || '').trim(),
+              attributes: attributes,
+              visible: rect.width > 0 && rect.height > 0 && computedStyle.visibility !== 'hidden',
+              enabled: !element.disabled,
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2),
+              width: rect.width,
+              height: rect.height,
+              type: element.type || null,
+              name: element.name || null,
+              id: element.id || null,
+              className: element.className || null,
+              placeholder: element.placeholder || null
+            };
+          })()
+        JS
+
+        response = send_command_and_wait('Runtime.evaluate', {
+          expression: js_expression,
+          returnByValue: true
+        }, 10)
+        
+        if response && response['result'] && response['result']['result']
+          response['result']['result']['value']
+        else
+          { error: 'Failed to debug element', selector: selector }
+        end
+      end
+
+      def debug_element_at_position(x, y)
+        js_expression = <<~JS
+          (() => {
+            const element = document.elementFromPoint(#{x}, #{y});
+            if (!element) {
+              return { error: 'No element found at position', x: #{x}, y: #{y} };
+            }
+            
+            const rect = element.getBoundingClientRect();
+            const computedStyle = window.getComputedStyle(element);
+            
+            // Get all attributes
+            const attributes = {};
+            for (let attr of element.attributes) {
+              attributes[attr.name] = attr.value;
+            }
+            
+            return {
+              success: true,
+              tagName: element.tagName.toLowerCase(),
+              text: (element.textContent || element.value || '').trim(),
+              attributes: attributes,
+              visible: rect.width > 0 && rect.height > 0 && computedStyle.visibility !== 'hidden',
+              enabled: !element.disabled,
+              x: Math.round(rect.left + rect.width / 2),
+              y: Math.round(rect.top + rect.height / 2),
+              width: rect.width,
+              height: rect.height,
+              type: element.type || null,
+              name: element.name || null,
+              id: element.id || null,
+              className: element.className || null,
+              placeholder: element.placeholder || null
+            };
+          })()
+        JS
+
+        response = send_command_and_wait('Runtime.evaluate', {
+          expression: js_expression,
+          returnByValue: true
+        }, 10)
+        
+        if response && response['result'] && response['result']['result']
+          response['result']['result']['value']
+        else
+          { error: 'Failed to debug element at position', x: x, y: y }
+        end
+      end
+
+      def clear_and_fill_field(selector, value, clear_method = 'select_all')
+        js_expression = <<~JS
+          (() => {
+            const element = document.querySelector('#{selector.gsub("'", "\\'")}');
+            if (!element) {
+              return { error: 'Element not found', selector: '#{selector.gsub("'", "\\'")}' };
+            }
+            
+            // Focus the element first
+            element.focus();
+            
+            // Clear the field using specified method
+            if ('#{clear_method}' === 'value_property') {
+              element.value = '';
+            } else if ('#{clear_method}' === 'select_all') {
+              element.select();
+              // Trigger key events to simulate user action
+              element.dispatchEvent(new KeyboardEvent('keydown', {key: 'a', ctrlKey: true, bubbles: true}));
+            } else if ('#{clear_method}' === 'backspace') {
+              // Select all first, then clear
+              element.select();
+            }
+            
+            // Set the new value
+            element.value = '#{value.gsub("'", "\\'")}';
+            
+            // Trigger change events
+            element.dispatchEvent(new Event('input', {bubbles: true}));
+            element.dispatchEvent(new Event('change', {bubbles: true}));
+            
+            return {
+              success: true,
+              selector: '#{selector.gsub("'", "\\'")}',
+              value: element.value,
+              method: '#{clear_method}'
+            };
+          })()
+        JS
+
+        response = send_command_and_wait('Runtime.evaluate', {
+          expression: js_expression,
+          returnByValue: true
+        }, 10)
+        
+        if response && response['result'] && response['result']['result']
+          result = response['result']['result']['value']
+          result.is_a?(Hash) ? result : { error: 'Invalid response from field operation' }
+        else
+          { error: 'Failed to clear and fill field', selector: selector }
+        end
+      end
+
       private
 
       def discover_tabs

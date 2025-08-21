@@ -641,6 +641,55 @@ module Inception
               required: ["x", "y"],
               additionalProperties: false
             }
+          },
+          {
+            name: "debug_element",
+            title: "Debug Element",
+            description: "Get detailed information about a specific element including attributes, computed styles, and interaction state.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                selector: {
+                  type: "string",
+                  description: "CSS selector for the element to debug"
+                },
+                x: {
+                  type: "number",
+                  description: "X coordinate to find element at specific position"
+                },
+                y: {
+                  type: "number", 
+                  description: "Y coordinate to find element at specific position"
+                }
+              },
+              additionalProperties: false
+            }
+          },
+          {
+            name: "clear_and_fill_field",
+            title: "Clear and Fill Form Field",
+            description: "Reliably clear a form field and fill it with new text. Handles various input types and clearing methods.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                selector: {
+                  type: "string",
+                  description: "CSS selector for the form field"
+                },
+                value: {
+                  type: "string",
+                  description: "Text to enter in the field"
+                },
+                clear_method: {
+                  type: "string",
+                  enum: ["select_all", "backspace", "value_property"],
+                  description: "Method to clear the field (default: select_all)",
+                  default: "select_all"
+                }
+              },
+              required: ["selector", "value"],
+              additionalProperties: false
+            }
           }
         ]
       end
@@ -1787,6 +1836,68 @@ module Inception
                 {
                   type: "text",
                   text: "Failed to set window position: #{result['error']}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "debug_element"
+          if arguments["selector"]
+            selector = arguments["selector"]
+            result = @cdp.debug_element_by_selector(selector)
+          elsif arguments["x"] && arguments["y"]
+            x = arguments["x"]
+            y = arguments["y"] 
+            result = @cdp.debug_element_at_position(x, y)
+          else
+            result = { error: "Must provide either selector or x,y coordinates" }
+          end
+          
+          if result && result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Element Debug Info:\nTag: #{result['tagName']}\nAttributes: #{result['attributes']}\nText: #{result['text']}\nVisible: #{result['visible']}\nEnabled: #{result['enabled']}\nPosition: (#{result['x']}, #{result['y']})\nSize: #{result['width']}x#{result['height']}"
+                }
+              ]
+            }
+          else
+            error_message = result ? result["error"] : "Debug operation failed"
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to debug element: #{error_message}"
+                }
+              ],
+              isError: true
+            }
+          end
+
+        when "clear_and_fill_field"
+          selector = arguments["selector"]
+          value = arguments["value"]
+          clear_method = arguments.fetch("clear_method", "select_all")
+          result = @cdp.clear_and_fill_field(selector, value, clear_method)
+          
+          if result && result["success"]
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Successfully cleared and filled field '#{selector}' with: #{result['value']}"
+                }
+              ]
+            }
+          else
+            error_message = result ? result["error"] : "Field operation failed"
+            {
+              content: [
+                {
+                  type: "text",
+                  text: "Failed to clear and fill field '#{selector}': #{error_message}"
                 }
               ],
               isError: true

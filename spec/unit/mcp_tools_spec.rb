@@ -11,7 +11,7 @@ RSpec.describe Inception::MCP::Tools do
       definitions = tools.tool_definitions
       
       expect(definitions).to be_an(Array)
-      expect(definitions.length).to eq(39)
+      expect(definitions.length).to eq(41)
       
       tool_names = definitions.map { |tool| tool[:name] }
       expected_tools = [
@@ -53,7 +53,9 @@ RSpec.describe Inception::MCP::Tools do
         'minimize_window',
         'restore_window',
         'get_window_bounds',
-        'set_window_position'
+        'set_window_position',
+        'debug_element',
+        'clear_and_fill_field'
       ]
       
       expect(tool_names).to match_array(expected_tools)
