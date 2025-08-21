@@ -149,7 +149,7 @@ module Inception
             inputSchema: {
               type: "object",
               properties: {
-                max_length: {
+                limit: {
                   type: "number",
                   description: "Maximum number of characters to return (default: 20000 to stay under token limits)",
                   minimum: 100,
@@ -836,7 +836,7 @@ module Inception
           end
 
         when "get_page_content"
-          max_length = arguments.fetch("max_length", 20000)
+          limit = arguments.fetch("limit", 20000)
           include_head = arguments.fetch("include_head", false)
           
           html_content = @cdp.get_page_content
@@ -848,9 +848,9 @@ module Inception
             end
             
             # Truncate if too long
-            if html_content.length > max_length
-              truncated_content = html_content[0, max_length]
-              truncated_content += "\n\n[CONTENT TRUNCATED - #{html_content.length - max_length} more characters available]"
+            if html_content.length > limit
+              truncated_content = html_content[0, limit]
+              truncated_content += "\n\n[CONTENT TRUNCATED - #{html_content.length - limit} more characters available]"
               html_content = truncated_content
             end
             
