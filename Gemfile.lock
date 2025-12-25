@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    inception-mcp (0.3.5)
+    inception-mcp (0.4.0)
       json (~> 2.6)
       thor (~> 1.0)
       websocket-client-simple (~> 0.6)
